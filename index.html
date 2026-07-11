@@ -590,7 +590,6 @@ function getDefaultData() {
   const d = {
     charName:'',playerName:'',classSubclass:'',charLevel:1,xp:0,
     ancestry:'',heritage:'',background:'',deity:'',alignment:'',size:'',traits:'',
-    abilityScores:{STR:10,DEX:10,CON:10,INT:10,WIS:10,CHA:10},
     abilityMods:{STR:0,DEX:0,CON:0,INT:0,WIS:0,CHA:0},
     hp_max:0,hp_current:0,hp_temp:0,dying:0,wounded:0,doomed:0,
     ac_prof:'U',ac_armor_type:'unarmored',ac_item:0,ac_other:0,
@@ -636,28 +635,14 @@ function loadData(){
     const s=localStorage.getItem(STORAGE_KEY);
     if(s){
       const loaded=JSON.parse(s);
-      // Backward compatibility: migrate old modifier-only saves to raw scores
-      if(loaded.abilities && !loaded.abilityScores){
-        loaded.abilityScores = {};
-        ABILITIES.forEach(ab => {
-          const score = loaded.abilities[ab];
-          loaded.abilityScores[ab] = (typeof score === 'number') ? score : 10;
-        });
-        delete loaded.abilities;
-      }
-      if(loaded.abilityMods && !loaded.abilityScores){
-        loaded.abilityScores = {};
-        ABILITIES.forEach(ab => {
-          const mod = loaded.abilityMods[ab];
-          loaded.abilityScores[ab] = (typeof mod === 'number') ? Math.max(1, (mod * 2) + 10) : 10;
-        });
-      }
-      if(!loaded.abilityMods && loaded.abilityScores){
+      // Backward compatibility: migrate old "abilities" scores to "abilityMods"
+      if(loaded.abilities && !loaded.abilityMods){
         loaded.abilityMods = {};
         ABILITIES.forEach(ab => {
-          const score = loaded.abilityScores[ab];
+          const score = loaded.abilities[ab];
           loaded.abilityMods[ab] = (typeof score === 'number') ? Math.floor((score - 10) / 2) : 0;
         });
+        delete loaded.abilities;
       }
       CD=mergeDeep(getDefaultData(),loaded);
     }
@@ -685,8 +670,8 @@ function showToast(){
   setTimeout(()=>t.classList.remove('show'),1500);
 }
 
-function getAbilityScore(ab){return parseInt(CD.abilityScores[ab])||10;}
-function getMod(ab){return Math.floor((getAbilityScore(ab)-10)/2);}
+// Now getMod just reads the modifier directly
+function getMod(ab){return parseInt(CD.abilityMods[ab])||0;}
 function fmtMod(v){return v>=0?'+'+v:''+v;}
 function profBonus(rank){const lvl=parseInt(CD.charLevel)||1;if(rank==='U')return 0;return lvl+PROF_VALUES[rank];}
 
@@ -733,20 +718,17 @@ function setNestedValue(obj,path,val){const p=path.split('.');let v=obj;for(let 
 function buildAbilities(){
   const g=document.getElementById('ability-grid');g.innerHTML='';
   ABILITIES.forEach(ab=>{
-    const scoreVal = CD.abilityScores[ab] || 10;
-    const modVal = getMod(ab);
+    const modVal = CD.abilityMods[ab] || 0;
     const d=document.createElement('div');
     d.className='ability-card';
     d.innerHTML=`<div class="ab-label">${ab}</div>
-      <div class="ab-sublabel">Score</div>
-      <input type="number" min="1" max="30" value="${scoreVal}" class="field-input ab-input" data-ability-score="${ab}" />
       <div class="ab-sublabel">Modifier</div>
-      <div class="ab-mod-display" id="mod-display-${ab}">${fmtMod(modVal)}</div>`;
+      <div class="ab-mod-display" id="mod-display-${ab}">${fmtMod(modVal)}</div>
+      <input type="number" min="-5" max="10" value="${modVal}" class="field-input ab-input" data-ability-mod="${ab}" />`;
     g.appendChild(d);
     d.querySelector('input').addEventListener('input',function(){
       const v = parseInt(this.value);
-      CD.abilityScores[ab] = isNaN(v) ? 10 : Math.max(1, Math.min(30, v));
-      CD.abilityMods[ab] = getMod(ab);
+      CD.abilityMods[ab] = isNaN(v) ? 0 : v;
       document.getElementById('mod-display-'+ab).textContent = fmtMod(CD.abilityMods[ab]);
       saveData();recalcAll();
     });
@@ -1193,18 +1175,6 @@ function wireSimpleInputs(){
         saveData();recalcAll();
       });
     });
-  });
-  ABILITIES.forEach(ab=>{
-    const el=document.querySelector(`[data-ability-score="${ab}"]`);
-    if(el){
-      el.addEventListener('input',function(){
-        CD.abilityScores[ab]=Math.max(1,Math.min(30,parseInt(this.value)||10));
-        CD.abilityMods[ab]=getMod(ab);
-        const modEl=document.getElementById('mod-display-'+ab);
-        if(modEl)modEl.textContent=fmtMod(getMod(ab));
-        saveData();recalcAll();
-      });
-    }
   });
   // Currency
   ['pp','gp','sp','cp'].forEach(c=>{
