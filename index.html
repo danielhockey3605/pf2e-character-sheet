@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="dark" />
+<title>Pathfinder Remaster Character Sheet</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        bg: { DEFAULT: '#0f0f14', card: '#1a1a24', input: '#0f0f18' },
+        border: { DEFAULT: '#2e2e3e', input: '#3a3a4e' },
+        crimson: { DEFAULT: '#9b1c1c', light: '#c0392b', dark: '#6b1414' },
+        txt: { DEFAULT: '#e8e8f0', muted: '#a0a0b8' },
+      },
+    },
+  },
+};
+</script>
+<script src="https://unpkg.com/lucide@latest" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0f0f14; --card: #1a1a24; --input-bg: #0f0f18;
+    --border: #2e2e3e; --border-input: #3a3a4e;
+    --crimson: #9b1c1c; --crimson-light: #c0392b; --crimson-dark: #6b1414;
+    --txt: #e8e8f0; --txt-muted: #a0a0b8;
+    --header-from: #1a0505; --header-to: #0f0f14;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Roboto', sans-serif; background: var(--bg); color: var(--txt); min-height: 100vh; }
+  h1,h2,h3,h4,h5,h6,.cinzel { font-family: 'Cinzel', serif; }
+  input[type="number"] { -moz-appearance: textfield; }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .field-input {
+    background: var(--input-bg); border: 1px solid var(--border-input);
+    color: var(--txt); border-radius: 4px; padding: 4px 8px; font-size: 14px;
+    font-family: 'Roboto', sans-serif; outline: none; transition: border-color 0.2s;
+  }
+  .field-input:focus { border-color: var(--crimson-light); }
+  .field-input::placeholder { color: #555570; }
+  .num-input { width: 68px; text-align: center; }
+  .section-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .section-title {
+    font-family: 'Cinzel', serif; text-transform: uppercase; font-size: 14px;
+    letter-spacing: 1.5px; color: var(--crimson-light); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+    border-bottom: 1px solid var(--crimson-dark); padding-bottom: 6px;
+  }
+  .prof-btn {
+    width: 26px; height: 26px; border-radius: 50%; border: 1px solid #444;
+    background: #222; color: #888; font-size: 10px; font-weight: 700;
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    transition: all 0.15s; font-family: 'Roboto', sans-serif;
+  }
+  .prof-btn.active { background: var(--crimson); color: #fff; border-color: var(--crimson-light); }
+  .prof-btn:hover { border-color: var(--crimson-light); }
+  .tab-btn-nav {
+    padding: 8px 14px; font-size: 13px; font-weight: 500; cursor: pointer;
+    background: transparent; border: none; color: var(--txt-muted);
+    border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s;
+    font-family: 'Roboto', sans-serif;
+  }
+  .tab-btn-nav.active { color: var(--crimson-light); border-bottom-color: var(--crimson-light); }
+  .tab-btn-nav:hover { color: var(--txt); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .mod-display {
+    font-size: 22px; font-weight: 700; font-family: 'Cinzel', serif; color: var(--crimson-light);
+  }
+  .chip {
+    display: inline-block; background: var(--crimson-dark); color: #e8e8f0;
+    padding: 2px 10px; border-radius: 12px; font-size: 11px; margin: 2px;
+    border: 1px solid var(--crimson);
+  }
+  .dot-btn {
+    width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--crimson);
+    background: transparent; cursor: pointer; display: inline-flex;
+    align-items: center; justify-content: center; transition: all 0.15s;
+    font-size: 0; margin: 0 1px;
+  }
+  .dot-btn.filled { background: var(--crimson-light); }
+  .toast {
+    position: fixed; bottom: 20px; right: 20px; background: #1a3a1a; color: #6f6;
+    padding: 8px 18px; border-radius: 6px; font-size: 13px; z-index: 9999;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    border: 1px solid #2a5a2a;
+  }
+  .toast.show { opacity: 1; }
+  textarea.field-input { resize: vertical; min-height: 60px; }
+  .scroll-tabs { scrollbar-width: thin; scrollbar-color: #333 transparent; }
+  .scroll-tabs::-webkit-scrollbar { height: 4px; }
+  .scroll-tabs::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+  .ability-card {
+    background: var(--bg); border-radius: 8px; padding: 12px 8px;
+    border: 1px solid var(--border); text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .ability-card .ab-label { font-family: 'Cinzel', serif; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--crimson-light); }
+  .ability-card .ab-sublabel { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--txt-muted); }
+  .ability-card .ab-mod-display { font-size: 28px; font-weight: 700; font-family: 'Cinzel', serif; color: var(--crimson-light); line-height: 1.1; }
+  .ability-card .ab-input { width: 60px; text-align: center; }
+
+  @media print {
+    body { background: #fff !important; color: #000 !important; font-size: 9pt; }
+    .section-card { background: #fff !important; border: 1px solid #ccc !important; box-shadow: none !important; break-inside: avoid; }
+    .section-title { color: #333 !important; border-bottom-color: #999 !important; }
+    .field-input, .num-input { background: #fff !important; border: 1px solid #aaa !important; color: #000 !important; }
+    .mod-display { color: #333 !important; }
+    .chip { background: #eee !important; color: #333 !important; border-color: #999 !important; }
+    .prof-btn { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .prof-btn.active { background: #333 !important; color: #fff !important; }
+    #tab-nav-bar, #header-buttons, #mobile-menu-btn-hdr, .toast, footer { display: none !important; }
+    .tab-content { display: block !important; page-break-inside: avoid; margin-bottom: 12px; }
+    #persistent-header { background: #fff !important; border-bottom-color: #ccc !important; }
+    #logo-text { color: #333 !important; }
+    .dot-btn { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .dot-btn.filled { background: #333 !important; }
+    .ability-card .ab-mod-display { color: #333 !important; }
+    * { color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body data-id="0" class="bg-bg text-txt">
+<app-icon data-id="1" hidden data-icon="sword" data-palette="Red"></app-icon>
+
+<!-- PERSISTENT HEADER -->
+<header data-id="2" id="persistent-header" class="sticky top-0 z-50 border-b border-border" style="background: linear-gradient(to right, var(--header-from), var(--header-to));">
+  <div data-id="3" class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+    <div data-id="4" id="logo-text" class="cinzel text-lg md:text-xl font-bold tracking-wider text-crimson-light flex items-center gap-2">⚔ PATHFINDER REMASTER</div>
+    <div data-id="5" id="header-buttons" class="flex items-center gap-2">
+      <button data-id="6" id="btn-print-hdr" class="flex items-center gap-1 px-3 py-1.5 bg-bg-card border border-border rounded text-sm hover:border-crimson-light transition-colors" title="Print / Export PDF"><i data-id="7" data-lucide="printer" class="w-4 h-4"></i><span data-id="8" class="hidden sm:inline ml-1">Print</span></button>
+      <button data-id="9" id="btn-reset-hdr" class="flex items-center gap-1 px-3 py-1.5 bg-bg-card border border-border rounded text-sm hover:border-crimson-light transition-colors" title="Reset Sheet"><i data-id="10" data-lucide="rotate-ccw" class="w-4 h-4"></i><span data-id="11" class="hidden sm:inline ml-1">Reset</span></button>
+    </div>
+  </div>
+  <!-- Character Identity Row -->
+  <div data-id="12" class="max-w-7xl mx-auto px-4 pb-3">
+    <div data-id="13" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+      <div data-id="14" class="col-span-2 md:col-span-2"><label data-id="15" class="text-[10px] text-txt-muted uppercase tracking-wide">Character Name</label><input data-id="16" id="charName" class="field-input w-full text-base font-bold" placeholder="Character Name" /></div>
+      <div data-id="17"><label data-id="18" class="text-[10px] text-txt-muted uppercase tracking-wide">Player</label><input data-id="19" id="playerName" class="field-input w-full" placeholder="Player" /></div>
+      <div data-id="20"><label data-id="21" class="text-[10px] text-txt-muted uppercase tracking-wide">Class / Subclass</label><input data-id="22" id="classSubclass" class="field-input w-full" placeholder="Fighter / Champion" /></div>
+      <div data-id="23"><label data-id="24" class="text-[10px] text-txt-muted uppercase tracking-wide">Level</label><input data-id="25" id="charLevel" type="number" min="1" max="20" value="1" class="field-input w-full" /></div>
+      <div data-id="26"><label data-id="27" class="text-[10px] text-txt-muted uppercase tracking-wide">XP</label><input data-id="28" id="xp" type="number" min="0" value="0" class="field-input w-full" /></div>
+    </div>
+    <div data-id="29" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 mt-2">
+      <div data-id="30"><label data-id="31" class="text-[10px] text-txt-muted uppercase tracking-wide">Ancestry</label><input data-id="32" id="ancestry" class="field-input w-full" placeholder="Human" /></div>
+      <div data-id="33"><label data-id="34" class="text-[10px] text-txt-muted uppercase tracking-wide">Heritage</label><input data-id="35" id="heritage" class="field-input w-full" placeholder="Versatile" /></div>
+      <div data-id="36"><label data-id="37" class="text-[10px] text-txt-muted uppercase tracking-wide">Background</label><input data-id="38" id="background" class="field-input w-full" placeholder="Scholar" /></div>
+      <div data-id="39"><label data-id="40" class="text-[10px] text-txt-muted uppercase tracking-wide">Deity / Philosophy</label><input data-id="41" id="deity" class="field-input w-full" placeholder="Sarenrae" /></div>
+      <div data-id="42"><label data-id="43" class="text-[10px] text-txt-muted uppercase tracking-wide">Alignment</label><input data-id="44" id="alignment" class="field-input w-full" placeholder="NG" /></div>
+      <div data-id="45"><label data-id="46" class="text-[10px] text-txt-muted uppercase tracking-wide">Size</label><input data-id="47" id="size" class="field-input w-full" placeholder="Medium" /></div>
+    </div>
+    <div data-id="48" class="mt-2">
+      <label data-id="49" class="text-[10px] text-txt-muted uppercase tracking-wide">Traits (comma-separated)</label>
+      <input data-id="50" id="traits" class="field-input w-full" placeholder="Humanoid, Human" />
+      <div data-id="51" id="traits-chips" class="mt-1 flex flex-wrap gap-1"></div>
+    </div>
+  </div>
+</header>
+
+<!-- TAB NAVIGATION -->
+<nav data-id="52" id="tab-nav-bar" class="sticky top-[calc(var(--header-h,180px))] z-40 bg-bg border-b border-border">
+  <div data-id="53" class="max-w-7xl mx-auto px-4 flex overflow-x-auto scroll-tabs">
+    <button data-id="54" class="tab-btn-nav active" data-tab="core">Core Stats</button>
+    <button data-id="55" class="tab-btn-nav" data-tab="skills">Skills</button>
+    <button data-id="56" class="tab-btn-nav" data-tab="strikes">Strikes & Actions</button>
+    <button data-id="57" class="tab-btn-nav" data-tab="feats">Feats & Abilities</button>
+    <button data-id="58" class="tab-btn-nav" data-tab="inventory">Inventory</button>
+    <button data-id="59" class="tab-btn-nav" data-tab="spells">Spellcasting</button>
+    <button data-id="60" class="tab-btn-nav" data-tab="rituals">Rituals</button>
+    <button data-id="61" class="tab-btn-nav" data-tab="notes">Background & Notes</button>
+  </div>
+</nav>
+
+<main data-id="62" class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+<!-- ==================== TAB 1: CORE STATS ==================== -->
+<div data-id="63" id="tab-core" class="tab-content active space-y-6">
+
+  <!-- Ability Scores -->
+  <div data-id="64" class="section-card">
+    <div data-id="65" class="section-title">⚔ Ability Modifiers</div>
+    <div data-id="66" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" id="ability-grid"></div>
+  </div>
+
+  <!-- Hit Points -->
+  <div data-id="67" class="section-card">
+    <div data-id="68" class="section-title">⚔ Hit Points</div>
+    <div data-id="69" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div data-id="70"><label data-id="71" class="text-[10px] text-txt-muted uppercase">Max HP</label><input data-id="72" id="hp_max" type="number" min="0" value="0" class="field-input w-full" /></div>
+      <div data-id="73"><label data-id="74" class="text-[10px] text-txt-muted uppercase">Current HP</label><input data-id="75" id="hp_current" type="number" value="0" class="field-input w-full" style="color:#6f6;" /></div>
+      <div data-id="76"><label data-id="77" class="text-[10px] text-txt-muted uppercase">Temp HP</label><input data-id="78" id="hp_temp" type="number" min="0" value="0" class="field-input w-full" style="color:#6bf;" /></div>
+      <div data-id="79">
+        <label data-id="80" class="text-[10px] text-txt-muted uppercase">Dying (0–4)</label>
+        <div data-id="81" class="flex gap-1 mt-1" id="dying-dots"></div>
+      </div>
+      <div data-id="82"><label data-id="83" class="text-[10px] text-txt-muted uppercase">Wounded</label><input data-id="84" id="wounded" type="number" min="0" max="3" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="85"><label data-id="86" class="text-[10px] text-txt-muted uppercase">Doomed</label><input data-id="87" id="doomed" type="number" min="0" max="3" value="0" class="field-input w-full num-input" /></div>
+    </div>
+  </div>
+
+  <!-- Armor Class -->
+  <div data-id="88" class="section-card">
+    <div data-id="89" class="section-title">⚔ Armor Class</div>
+    <div data-id="90" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div data-id="91" class="flex flex-col items-center justify-center bg-bg rounded-lg p-3 border border-crimson-dark">
+        <span data-id="92" class="text-[10px] text-txt-muted uppercase">Total AC</span>
+        <span data-id="93" id="ac_total" class="mod-display text-3xl">10</span>
+      </div>
+      <div data-id="94">
+        <label data-id="95" class="text-[10px] text-txt-muted uppercase">Armor Type</label>
+        <select data-id="96" id="ac_armor_type" class="field-input w-full">
+          <option data-id="97" value="unarmored">Unarmored</option><option data-id="98" value="light">Light</option><option data-id="99" value="medium">Medium</option><option data-id="100" value="heavy">Heavy</option>
+        </select>
+        <label data-id="101" class="text-[10px] text-txt-muted uppercase mt-1">Armor Prof</label>
+        <div data-id="102" class="flex gap-1 mt-1" id="ac-prof"></div>
+      </div>
+      <div data-id="103"><label data-id="104" class="text-[10px] text-txt-muted uppercase">Item Bonus</label><input data-id="105" id="ac_item" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="106"><label data-id="107" class="text-[10px] text-txt-muted uppercase">Other</label><input data-id="108" id="ac_other" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="109"><label data-id="110" class="text-[10px] text-txt-muted uppercase">Shield Bonus</label><input data-id="111" id="shield_bonus" type="number" value="0" class="field-input w-full num-input" /><label data-id="112" class="text-[10px] text-txt-muted uppercase mt-1">Shield HP</label><input data-id="113" id="shield_hp" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="114"><label data-id="115" class="text-[10px] text-txt-muted uppercase">Hardness</label><input data-id="116" id="shield_hardness" type="number" value="0" class="field-input w-full num-input" /><label data-id="117" class="text-[10px] text-txt-muted uppercase mt-1">Broken Threshold</label><input data-id="118" id="shield_bt" type="number" value="0" class="field-input w-full num-input" /></div>
+    </div>
+  </div>
+
+  <!-- Saving Throws -->
+  <div data-id="119" class="section-card">
+    <div data-id="120" class="section-title">⚔ Saving Throws</div>
+    <div data-id="121" class="grid grid-cols-1 sm:grid-cols-3 gap-4" id="saves-grid"></div>
+  </div>
+
+  <!-- Perception -->
+  <div data-id="122" class="section-card">
+    <div data-id="123" class="section-title">⚔ Perception</div>
+    <div data-id="124" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div data-id="125" class="flex flex-col items-center justify-center bg-bg rounded-lg p-3 border border-crimson-dark">
+        <span data-id="126" class="text-[10px] text-txt-muted uppercase">Total</span>
+        <span data-id="127" id="perception_total" class="mod-display text-2xl">+0</span>
+      </div>
+      <div data-id="128"><label data-id="129" class="text-[10px] text-txt-muted uppercase">Proficiency</label><div data-id="130" class="flex gap-1 mt-1" id="perception-prof"></div></div>
+      <div data-id="131"><label data-id="132" class="text-[10px] text-txt-muted uppercase">Item</label><input data-id="133" id="perception_item" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="134"><label data-id="135" class="text-[10px] text-txt-muted uppercase">Other</label><input data-id="136" id="perception_other" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="137" class="col-span-2"><label data-id="138" class="text-[10px] text-txt-muted uppercase">Senses</label><input data-id="139" id="senses" class="field-input w-full" placeholder="darkvision, scent..." /></div>
+    </div>
+  </div>
+
+  <!-- Speed -->
+  <div data-id="140" class="section-card">
+    <div data-id="141" class="section-title">⚔ Speed & Movement</div>
+    <div data-id="142" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div data-id="143"><label data-id="144" class="text-[10px] text-txt-muted uppercase">Base Speed (ft)</label><input data-id="145" id="speed_base" type="number" value="25" class="field-input w-full num-input" /></div>
+      <div data-id="146"><label data-id="147" class="text-[10px] text-txt-muted uppercase">Fly</label><input data-id="148" id="speed_fly" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="149"><label data-id="150" class="text-[10px] text-txt-muted uppercase">Swim</label><input data-id="151" id="speed_swim" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="152"><label data-id="153" class="text-[10px] text-txt-muted uppercase">Climb</label><input data-id="154" id="speed_climb" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="155"><label data-id="156" class="text-[10px] text-txt-muted uppercase">Burrow</label><input data-id="157" id="speed_burrow" type="number" value="0" class="field-input w-full num-input" /></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TAB 2: SKILLS ==================== -->
+<div data-id="158" id="tab-skills" class="tab-content space-y-4">
+  <div data-id="159" class="section-card">
+    <div data-id="160" class="section-title">⚔ Skills</div>
+    <div data-id="161" class="overflow-x-auto">
+      <table data-id="162" class="w-full text-sm" id="skills-table">
+        <thead data-id="163">
+          <tr data-id="164" class="text-[10px] text-txt-muted uppercase tracking-wide border-b border-border">
+            <th data-id="165" class="text-left py-2 px-1 w-24">Prof</th>
+            <th data-id="166" class="text-left py-2 px-1">Skill</th>
+            <th data-id="167" class="text-center py-2 px-1 w-14">Key</th>
+            <th data-id="168" class="text-center py-2 px-1 w-14">Abil</th>
+            <th data-id="169" class="text-center py-2 px-1 w-14">Prof</th>
+            <th data-id="170" class="text-center py-2 px-1 w-14">Item</th>
+            <th data-id="171" class="text-center py-2 px-1 w-14">Other</th>
+            <th data-id="172" class="text-center py-2 px-1 w-16">Total</th>
+          </tr>
+        </thead>
+        <tbody data-id="173" id="skills-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TAB 3: STRIKES & ACTIONS ==================== -->
+<div data-id="174" id="tab-strikes" class="tab-content space-y-6">
+  <div data-id="175" class="section-card">
+    <div data-id="176" class="section-title">⚔ Strikes</div>
+    <div data-id="177" class="space-y-4" id="strikes-container"></div>
+  </div>
+
+  <div data-id="178" class="section-card">
+    <div data-id="179" class="section-title">⚔ Action Types Reference</div>
+    <div data-id="180" class="flex flex-wrap gap-4 text-sm">
+      <span data-id="181" class="bg-bg px-3 py-1.5 rounded border border-border"><span data-id="182" class="text-crimson-light font-bold text-lg">◆</span> 1 Action</span>
+      <span data-id="183" class="bg-bg px-3 py-1.5 rounded border border-border"><span data-id="184" class="text-crimson-light font-bold text-lg">◆◆</span> 2 Actions</span>
+      <span data-id="185" class="bg-bg px-3 py-1.5 rounded border border-border"><span data-id="186" class="text-crimson-light font-bold text-lg">◆◆◆</span> 3 Actions</span>
+      <span data-id="187" class="bg-bg px-3 py-1.5 rounded border border-border"><span data-id="188" class="text-crimson-light font-bold text-lg">↺</span> Reaction</span>
+      <span data-id="189" class="bg-bg px-3 py-1.5 rounded border border-border"><span data-id="190" class="text-crimson-light font-bold text-lg">◇</span> Free Action</span>
+    </div>
+  </div>
+
+  <div data-id="191" class="section-card">
+    <div data-id="192" class="section-title">⚔ Free Actions & Reactions</div>
+    <div data-id="193" class="space-y-2" id="reactions-container"></div>
+  </div>
+
+  <div data-id="194" class="section-card">
+    <div data-id="195" class="section-title">⚔ Hero Points</div>
+    <div data-id="196" class="flex gap-2 items-center">
+      <span data-id="197" class="text-sm text-txt-muted mr-2">Hero Points:</span>
+      <div data-id="198" id="hero-dots" class="flex gap-2"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TAB 4: FEATS & ABILITIES ==================== -->
+<div data-id="199" id="tab-feats" class="tab-content space-y-6">
+  <div data-id="200" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div data-id="201" class="section-card">
+      <div data-id="202" class="section-title">⚔ Ancestry Feats</div>
+      <div data-id="203" class="space-y-2" id="ancestry-feats"></div>
+    </div>
+    <div data-id="204" class="section-card">
+      <div data-id="205" class="section-title">⚔ Class Feats</div>
+      <div data-id="206" class="space-y-2" id="class-feats"></div>
+    </div>
+    <div data-id="207" class="section-card">
+      <div data-id="208" class="section-title">⚔ Skill Feats</div>
+      <div data-id="209" class="space-y-2" id="skill-feats"></div>
+    </div>
+    <div data-id="210" class="section-card">
+      <div data-id="211" class="section-title">⚔ General Feats</div>
+      <div data-id="212" class="space-y-2" id="general-feats"></div>
+    </div>
+  </div>
+  <div data-id="213" class="section-card">
+    <div data-id="214" class="section-title">⚔ Class Features & Abilities</div>
+    <div data-id="215" class="space-y-2" id="class-features"></div>
+  </div>
+</div>
+
+<!-- ==================== TAB 5: INVENTORY ==================== -->
+<div data-id="216" id="tab-inventory" class="tab-content space-y-6">
+  <div data-id="217" class="section-card">
+    <div data-id="218" class="section-title">⚔ Worn Armor</div>
+    <div data-id="219" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div data-id="220"><label data-id="221" class="text-[10px] text-txt-muted uppercase">Armor Name</label><input data-id="222" id="armor_name" class="field-input w-full" /></div>
+      <div data-id="223"><label data-id="224" class="text-[10px] text-txt-muted uppercase">Type</label><input data-id="225" id="armor_type" class="field-input w-full" placeholder="Light/Medium/Heavy" /></div>
+      <div data-id="226"><label data-id="227" class="text-[10px] text-txt-muted uppercase">AC Bonus</label><input data-id="228" id="armor_ac" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="229"><label data-id="230" class="text-[10px] text-txt-muted uppercase">Max DEX</label><input data-id="231" id="armor_maxdex" type="number" value="5" class="field-input w-full num-input" /></div>
+      <div data-id="232"><label data-id="233" class="text-[10px] text-txt-muted uppercase">Check Penalty</label><input data-id="234" id="armor_check" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="235"><label data-id="236" class="text-[10px] text-txt-muted uppercase">Speed Penalty</label><input data-id="237" id="armor_speed" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="238"><label data-id="239" class="text-[10px] text-txt-muted uppercase">Strength</label><input data-id="240" id="armor_str" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="241"><label data-id="242" class="text-[10px] text-txt-muted uppercase">Bulk</label><input data-id="243" id="armor_bulk" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="244" class="col-span-2"><label data-id="245" class="text-[10px] text-txt-muted uppercase">Traits</label><input data-id="246" id="armor_traits" class="field-input w-full" /></div>
+    </div>
+    <div data-id="247" class="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+      <div data-id="248"><label data-id="249" class="text-[10px] text-txt-muted uppercase">Resilient Tier</label>
+        <select data-id="250" id="armor_resilient" class="field-input w-full"><option data-id="251" value="">None</option><option data-id="252" value="1">Resilient (+1)</option><option data-id="253" value="2">Greater Resilient (+2)</option><option data-id="254" value="3">Major Resilient (+3)</option></select>
+      </div>
+      <div data-id="255"><label data-id="256" class="text-[10px] text-txt-muted uppercase">Property Rune 1</label><input data-id="257" id="armor_rune1" class="field-input w-full" /></div>
+      <div data-id="258"><label data-id="259" class="text-[10px] text-txt-muted uppercase">Property Rune 2</label><input data-id="260" id="armor_rune2" class="field-input w-full" /></div>
+      <div data-id="261"><label data-id="262" class="text-[10px] text-txt-muted uppercase">Property Rune 3</label><input data-id="263" id="armor_rune3" class="field-input w-full" /></div>
+    </div>
+  </div>
+
+  <div data-id="264" class="section-card">
+    <div data-id="265" class="section-title">⚔ Weapons Carried</div>
+    <div data-id="266" class="space-y-3" id="weapons-container"></div>
+  </div>
+
+  <div data-id="267" class="section-card">
+    <div data-id="268" class="section-title">⚔ Inventory</div>
+    <div data-id="269" class="overflow-x-auto">
+      <table data-id="270" class="w-full text-sm">
+        <thead data-id="271"><tr data-id="272" class="text-[10px] text-txt-muted uppercase tracking-wide border-b border-border">
+          <th data-id="273" class="text-left py-2 px-1">Item</th><th data-id="274" class="text-center py-2 px-1 w-14">Qty</th><th data-id="275" class="text-center py-2 px-1 w-14">Bulk</th><th data-id="276" class="text-center py-2 px-1 w-20">Value (gp)</th><th data-id="277" class="text-left py-2 px-1">Description</th>
+        </tr></thead>
+        <tbody data-id="278" id="inventory-body"></tbody>
+        <tfoot data-id="279"><tr data-id="280" class="border-t border-border font-bold"><td data-id="281" class="py-2 px-1 text-right" colspan="2">Total Bulk:</td><td data-id="282" class="text-center py-2 px-1" id="total-bulk">0</td><td data-id="283" colspan="2"></td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div data-id="284" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div data-id="285" class="section-card">
+      <div data-id="286" class="section-title">⚔ Currency</div>
+      <div data-id="287" class="grid grid-cols-4 gap-2">
+        <div data-id="288"><label data-id="289" class="text-[10px] text-txt-muted uppercase">◉ PP</label><input data-id="290" id="currency_pp" type="number" value="0" min="0" class="field-input w-full num-input" /></div>
+        <div data-id="291"><label data-id="292" class="text-[10px] text-txt-muted uppercase">◉ GP</label><input data-id="293" id="currency_gp" type="number" value="0" min="0" class="field-input w-full num-input" /></div>
+        <div data-id="294"><label data-id="295" class="text-[10px] text-txt-muted uppercase">◉ SP</label><input data-id="296" id="currency_sp" type="number" value="0" min="0" class="field-input w-full num-input" /></div>
+        <div data-id="297"><label data-id="298" class="text-[10px] text-txt-muted uppercase">◉ CP</label><input data-id="299" id="currency_cp" type="number" value="0" min="0" class="field-input w-full num-input" /></div>
+      </div>
+    </div>
+    <div data-id="300" class="section-card">
+      <div data-id="301" class="section-title">⚔ Bulk Summary</div>
+      <div data-id="302" class="grid grid-cols-3 gap-2 text-center">
+        <div data-id="303"><span data-id="304" class="text-[10px] text-txt-muted uppercase block">Current</span><span data-id="305" id="bulk-current" class="mod-display text-xl">0</span></div>
+        <div data-id="306"><span data-id="307" class="text-[10px] text-txt-muted uppercase block">Light Enc.</span><span data-id="308" id="bulk-light" class="mod-display text-xl">5</span></div>
+        <div data-id="309"><span data-id="310" class="text-[10px] text-txt-muted uppercase block">Max Enc.</span><span data-id="311" id="bulk-max" class="mod-display text-xl">10</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TAB 6: SPELLCASTING ==================== -->
+<div data-id="312" id="tab-spells" class="tab-content space-y-6">
+  <div data-id="313" class="section-card">
+    <div data-id="314" class="section-title">⚔ Spellcasting</div>
+    <div data-id="315" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div data-id="316"><label data-id="317" class="text-[10px] text-txt-muted uppercase">Tradition</label>
+        <select data-id="318" id="spell_tradition" class="field-input w-full"><option data-id="319">Arcane</option><option data-id="320">Divine</option><option data-id="321">Occult</option><option data-id="322">Primal</option><option data-id="323">Elemental</option></select></div>
+      <div data-id="324"><label data-id="325" class="text-[10px] text-txt-muted uppercase">Type</label>
+        <select data-id="326" id="spell_type" class="field-input w-full"><option data-id="327">Prepared</option><option data-id="328">Spontaneous</option><option data-id="329">Innate</option></select></div>
+      <div data-id="330"><label data-id="331" class="text-[10px] text-txt-muted uppercase">Key Ability</label>
+        <select data-id="332" id="spell_key_ability" class="field-input w-full"><option data-id="333">INT</option><option data-id="334">WIS</option><option data-id="335">CHA</option><option data-id="336">STR</option><option data-id="337">DEX</option><option data-id="338">CON</option></select></div>
+      <div data-id="339"><label data-id="340" class="text-[10px] text-txt-muted uppercase">Spell Prof</label><div data-id="341" class="flex gap-1 mt-1" id="spell-prof"></div></div>
+      <div data-id="342" class="flex flex-col items-center justify-center bg-bg rounded-lg p-2 border border-crimson-dark">
+        <span data-id="343" class="text-[10px] text-txt-muted uppercase">Spell DC</span>
+        <span data-id="344" id="spell_dc" class="mod-display text-2xl">10</span>
+      </div>
+      <div data-id="345" class="flex flex-col items-center justify-center bg-bg rounded-lg p-2 border border-crimson-dark">
+        <span data-id="346" class="text-[10px] text-txt-muted uppercase">Spell Attack</span>
+        <span data-id="347" id="spell_attack" class="mod-display text-2xl">+0</span>
+      </div>
+    </div>
+    <div data-id="348" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+      <div data-id="349"><label data-id="350" class="text-[10px] text-txt-muted uppercase">Item Bonus (DC)</label><input data-id="351" id="spell_item" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="352"><label data-id="353" class="text-[10px] text-txt-muted uppercase">Other (DC)</label><input data-id="354" id="spell_other" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="355"><label data-id="356" class="text-[10px] text-txt-muted uppercase">Item (Attack)</label><input data-id="357" id="spell_atk_item" type="number" value="0" class="field-input w-full num-input" /></div>
+      <div data-id="358"><label data-id="359" class="text-[10px] text-txt-muted uppercase">Other (Attack)</label><input data-id="360" id="spell_atk_other" type="number" value="0" class="field-input w-full num-input" /></div>
+    </div>
+  </div>
+
+  <div data-id="361" class="section-card">
+    <div data-id="362" class="section-title">⚔ Focus Spells</div>
+    <div data-id="363" class="flex items-center gap-3 mb-3">
+      <span data-id="364" class="text-sm text-txt-muted">Focus Points:</span>
+      <div data-id="365" id="focus-dots" class="flex gap-1"></div>
+      <span data-id="366" class="text-sm text-txt-muted">/ Max:</span>
+      <input data-id="367" id="focus_max" type="number" min="0" max="3" value="1" class="field-input num-input w-14" />
+    </div>
+    <div data-id="368" class="space-y-2" id="focus-spells-container"></div>
+  </div>
+
+  <div data-id="369" class="section-card">
+    <div data-id="370" class="section-title">⚔ Cantrips</div>
+    <div data-id="371" class="space-y-2" id="cantrips-container"></div>
+  </div>
+
+  <div data-id="372" class="section-card">
+    <div data-id="373" class="section-title">⚔ Spell Slots by Level</div>
+    <div data-id="374" class="space-y-3" id="spell-slots-container"></div>
+  </div>
+
+  <div data-id="375" class="section-card">
+    <div data-id="376" class="section-title">⚔ Innate Spells</div>
+    <div data-id="377" class="space-y-2" id="innate-spells-container"></div>
+  </div>
+</div>
+
+<!-- ==================== TAB 7: RITUALS ==================== -->
+<div data-id="378" id="tab-rituals" class="tab-content space-y-4">
+  <div data-id="379" class="section-card">
+    <div data-id="380" class="section-title">⚔ Rituals</div>
+    <div data-id="381" class="overflow-x-auto">
+      <table data-id="382" class="w-full text-sm">
+        <thead data-id="383"><tr data-id="384" class="text-[10px] text-txt-muted uppercase tracking-wide border-b border-border">
+          <th data-id="385" class="text-left py-2 px-1">Name</th><th data-id="386" class="text-center py-2 px-1 w-12">Lvl</th><th data-id="387" class="text-left py-2 px-1">Cast Time</th><th data-id="388" class="text-left py-2 px-1">Cost</th><th data-id="389" class="text-left py-2 px-1">Primary Check</th><th data-id="390" class="text-left py-2 px-1">Secondary</th><th data-id="391" class="text-left py-2 px-1">Traits</th><th data-id="392" class="text-left py-2 px-1">Effect</th>
+        </tr></thead>
+        <tbody data-id="393" id="rituals-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TAB 8: BACKGROUND & NOTES ==================== -->
+<div data-id="394" id="tab-notes" class="tab-content space-y-6">
+  <div data-id="395" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div data-id="396" class="space-y-4">
+      <div data-id="397" class="section-card">
+        <div data-id="398" class="section-title">⚔ Background Details</div>
+        <div data-id="399" class="space-y-2">
+          <div data-id="400"><label data-id="401" class="text-[10px] text-txt-muted uppercase">Ability Boosts</label><input data-id="402" id="bg_boosts" class="field-input w-full" /></div>
+          <div data-id="403"><label data-id="404" class="text-[10px] text-txt-muted uppercase">Skill Trainings</label><input data-id="405" id="bg_skills" class="field-input w-full" /></div>
+          <div data-id="406"><label data-id="407" class="text-[10px] text-txt-muted uppercase">Background Feat</label><input data-id="408" id="bg_feat" class="field-input w-full" /></div>
+          <div data-id="409"><label data-id="410" class="text-[10px] text-txt-muted uppercase">Background Lore</label><input data-id="411" id="bg_lore" class="field-input w-full" /></div>
+        </div>
+      </div>
+      <div data-id="412" class="section-card">
+        <div data-id="413" class="section-title">⚔ Character Backstory</div>
+        <textarea data-id="414" id="backstory" class="field-input w-full" rows="8" placeholder="Write your character's backstory..."></textarea>
+      </div>
+      <div data-id="415" class="section-card">
+        <div data-id="416" class="section-title">⚔ Personality</div>
+        <div data-id="417" class="space-y-2">
+          <div data-id="418"><label data-id="419" class="text-[10px] text-txt-muted uppercase">Traits</label><textarea data-id="420" id="personality_traits" class="field-input w-full" rows="2"></textarea></div>
+          <div data-id="421"><label data-id="422" class="text-[10px] text-txt-muted uppercase">Ideals</label><textarea data-id="423" id="personality_ideals" class="field-input w-full" rows="2"></textarea></div>
+          <div data-id="424"><label data-id="425" class="text-[10px] text-txt-muted uppercase">Bonds</label><textarea data-id="426" id="personality_bonds" class="field-input w-full" rows="2"></textarea></div>
+          <div data-id="427"><label data-id="428" class="text-[10px] text-txt-muted uppercase">Flaws</label><textarea data-id="429" id="personality_flaws" class="field-input w-full" rows="2"></textarea></div>
+        </div>
+      </div>
+    </div>
+    <div data-id="430" class="space-y-4">
+      <div data-id="431" class="section-card">
+        <div data-id="432" class="section-title">⚔ Allies & Companions</div>
+        <div data-id="433" class="space-y-2" id="allies-container"></div>
+      </div>
+      <div data-id="434" class="section-card">
+        <div data-id="435" class="section-title">⚔ Organizations & Factions</div>
+        <div data-id="436" class="space-y-2" id="orgs-container"></div>
+      </div>
+      <div data-id="437" class="section-card">
+        <div data-id="438" class="section-title">⚔ Enemies & Rivals</div>
+        <div data-id="439" class="space-y-2" id="enemies-container"></div>
+      </div>
+      <div data-id="440" class="section-card">
+        <div data-id="441" class="section-title">⚔ Campaign Notes</div>
+        <textarea data-id="442" id="campaign_notes" class="field-input w-full" rows="10" placeholder="Campaign notes..."></textarea>
+      </div>
+      <div data-id="443" class="section-card">
+        <div data-id="444" class="section-title">⚔ Miscellaneous Notes</div>
+        <textarea data-id="445" id="misc_notes" class="field-input w-full" rows="6" placeholder="Misc notes..."></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<footer data-id="446" class="text-center py-4 text-xs text-txt-muted border-t border-border mt-8">
+  Made by Copilot
+</footer>
+
+<div data-id="447" id="save-toast" class="toast">Auto-saved ✓</div>
+
+<!-- Confirmation Modal -->
+<div data-id="448" id="reset-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-black/60">
+  <div data-id="449" class="section-card max-w-sm mx-4 p-6 text-center">
+    <h3 data-id="450" class="cinzel text-lg text-crimson-light mb-3">Reset Character Sheet?</h3>
+    <p data-id="451" class="text-sm text-txt-muted mb-5">Clear all data and start a new character? This cannot be undone.</p>
+    <div data-id="452" class="flex gap-3 justify-center">
+      <button data-id="453" id="reset-cancel" class="px-4 py-2 bg-bg border border-border rounded text-sm hover:border-crimson-light transition-colors">Cancel</button>
+      <button data-id="454" id="reset-confirm" class="px-4 py-2 bg-crimson border border-crimson-light rounded text-sm text-white hover:bg-crimson-light transition-colors">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==============================
+// STATE & CONSTANTS
+// ==============================
+const STORAGE_KEY = 'pf2e-remaster-sheet';
+const ABILITIES = ['STR','DEX','CON','INT','WIS','CHA'];
+const PROF_RANKS = ['U','T','E','M','L'];
+const PROF_VALUES = {U:0,T:2,E:4,M:6,L:8};
+const SKILLS_DATA = [
+  {name:'Acrobatics',key:'DEX',trained:false},
+  {name:'Arcana',key:'INT',trained:true},
+  {name:'Athletics',key:'STR',trained:false},
+  {name:'Crafting',key:'INT',trained:false},
+  {name:'Deception',key:'CHA',trained:false},
+  {name:'Diplomacy',key:'CHA',trained:false},
+  {name:'Intimidation',key:'CHA',trained:false},
+  {name:'Lore 1',key:'INT',trained:true,lore:true},
+  {name:'Lore 2',key:'INT',trained:true,lore:true},
+  {name:'Medicine',key:'WIS',trained:true},
+  {name:'Nature',key:'WIS',trained:false},
+  {name:'Occultism',key:'INT',trained:true},
+  {name:'Performance',key:'CHA',trained:false},
+  {name:'Religion',key:'WIS',trained:true},
+  {name:'Society',key:'INT',trained:true},
+  {name:'Stealth',key:'DEX',trained:false},
+  {name:'Survival',key:'WIS',trained:false},
+  {name:'Thievery',key:'DEX',trained:true}
+];
+
+let CD = getDefaultData();
+
+function getDefaultData() {
+  const d = {
+    charName:'',playerName:'',classSubclass:'',charLevel:1,xp:0,
+    ancestry:'',heritage:'',background:'',deity:'',alignment:'',size:'',traits:'',
+    abilityScores:{STR:10,DEX:10,CON:10,INT:10,WIS:10,CHA:10},
+    abilityMods:{STR:0,DEX:0,CON:0,INT:0,WIS:0,CHA:0},
+    hp_max:0,hp_current:0,hp_temp:0,dying:0,wounded:0,doomed:0,
+    ac_prof:'U',ac_armor_type:'unarmored',ac_item:0,ac_other:0,
+    shield_bonus:0,shield_hp:0,shield_hardness:0,shield_bt:0,
+    saves:{fortitude:{prof:'U',item:0,status:0,circ:0},reflex:{prof:'U',item:0,status:0,circ:0},will:{prof:'U',item:0,status:0,circ:0}},
+    perception_prof:'U',perception_item:0,perception_other:0,senses:'',
+    speed_base:25,speed_fly:0,speed_swim:0,speed_climb:0,speed_burrow:0,
+    skills:{},skillItems:{},skillOther:{},loreName1:'',loreName2:'',
+    strikes:[{name:'',atk:0,dmgDice:'',dmgBonus:0,dmgType:'',range:'',traits:'',notes:''},{name:'',atk:0,dmgDice:'',dmgBonus:0,dmgType:'',range:'',traits:'',notes:''},{name:'',atk:0,dmgDice:'',dmgBonus:0,dmgType:'',range:'',traits:'',notes:''}],
+    reactions:Array.from({length:6},()=>({name:'',actions:'◆',trigger:'',desc:''})),
+    heroPoints:0,
+    ancestryFeats:Array.from({length:10},()=>({level:'',name:'',desc:''})),
+    classFeats:Array.from({length:10},()=>({level:'',name:'',desc:''})),
+    skillFeats:Array.from({length:10},()=>({level:'',name:'',skill:'',desc:''})),
+    generalFeats:Array.from({length:10},()=>({level:'',name:'',desc:''})),
+    classFeatures:Array.from({length:12},()=>({name:'',level:'',desc:''})),
+    armor:{name:'',type:'',ac:0,maxdex:5,check:0,speed:0,str:0,bulk:0,traits:'',resilient:'',rune1:'',rune2:'',rune3:''},
+    weapons:Array.from({length:5},()=>({name:'',category:'',damage:'',traits:'',bulk:0,runes:''})),
+    inventory:Array.from({length:20},()=>({name:'',qty:0,bulk:0,value:'',desc:''})),
+    currency:{pp:0,gp:0,sp:0,cp:0},
+    spell_tradition:'Arcane',spell_type:'Prepared',spell_key_ability:'INT',spell_prof:'U',
+    spell_item:0,spell_other:0,spell_atk_item:0,spell_atk_other:0,
+    focus_current:0,focus_max:1,
+    focusSpells:Array.from({length:8},()=>({name:'',actions:'',traits:'',desc:''})),
+    cantrips:Array.from({length:10},()=>({name:'',actions:'',heightened:'',traits:'',desc:''})),
+    spellSlots:{},spellNames:{},
+    innateSpells:Array.from({length:6},()=>({name:'',level:'',frequency:'',dc:'',notes:''})),
+    rituals:Array.from({length:12},()=>({name:'',level:'',castTime:'',cost:'',primary:'',secondary:'',traits:'',effect:''})),
+    bg_boosts:'',bg_skills:'',bg_feat:'',bg_lore:'',backstory:'',
+    personality_traits:'',personality_ideals:'',personality_bonds:'',personality_flaws:'',
+    allies:Array.from({length:6},()=>({name:'',desc:''})),
+    orgs:Array.from({length:4},()=>({name:'',desc:''})),
+    enemies:Array.from({length:4},()=>({name:'',desc:''})),
+    campaign_notes:'',misc_notes:''
+  };
+  SKILLS_DATA.forEach(s=>{const k=s.name.replace(/\s/g,'_');d.skills[k]='U';d.skillItems[k]=0;d.skillOther[k]=0;});
+  for(let i=1;i<=10;i++){d.spellSlots['lvl'+i]={total:0,used:0};d.spellNames['lvl'+i]=Array(4).fill('');}
+  return d;
+}
+
+function loadData(){
+  try{
+    const s=localStorage.getItem(STORAGE_KEY);
+    if(s){
+      const loaded=JSON.parse(s);
+      // Backward compatibility: migrate old modifier-only saves to raw scores
+      if(loaded.abilities && !loaded.abilityScores){
+        loaded.abilityScores = {};
+        ABILITIES.forEach(ab => {
+          const score = loaded.abilities[ab];
+          loaded.abilityScores[ab] = (typeof score === 'number') ? score : 10;
+        });
+        delete loaded.abilities;
+      }
+      if(loaded.abilityMods && !loaded.abilityScores){
+        loaded.abilityScores = {};
+        ABILITIES.forEach(ab => {
+          const mod = loaded.abilityMods[ab];
+          loaded.abilityScores[ab] = (typeof mod === 'number') ? Math.max(1, (mod * 2) + 10) : 10;
+        });
+      }
+      if(!loaded.abilityMods && loaded.abilityScores){
+        loaded.abilityMods = {};
+        ABILITIES.forEach(ab => {
+          const score = loaded.abilityScores[ab];
+          loaded.abilityMods[ab] = (typeof score === 'number') ? Math.floor((score - 10) / 2) : 0;
+        });
+      }
+      CD=mergeDeep(getDefaultData(),loaded);
+    }
+  }catch(e){CD=getDefaultData();}
+}
+function mergeDeep(target,src){
+  for(const k in src){
+    if(src[k]&&typeof src[k]==='object'&&!Array.isArray(src[k])&&typeof target[k]==='object'&&!Array.isArray(target[k])){
+      target[k]=mergeDeep(target[k],src[k]);
+    } else { target[k]=src[k]; }
+  }
+  return target;
+}
+
+let saveTimeout;
+function saveData(){
+  clearTimeout(saveTimeout);
+  saveTimeout=setTimeout(()=>{
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(CD));}catch(e){}
+    showToast();
+  },300);
+}
+function showToast(){
+  const t=document.getElementById('save-toast');t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),1500);
+}
+
+function getAbilityScore(ab){return parseInt(CD.abilityScores[ab])||10;}
+function getMod(ab){return Math.floor((getAbilityScore(ab)-10)/2);}
+function fmtMod(v){return v>=0?'+'+v:''+v;}
+function profBonus(rank){const lvl=parseInt(CD.charLevel)||1;if(rank==='U')return 0;return lvl+PROF_VALUES[rank];}
+
+// ==============================
+// BUILD UI
+// ==============================
+function buildAll(){
+  buildAbilities();buildDyingDots();buildSaves();buildPerceptionProf();buildACProf();
+  buildSkills();buildStrikes();buildReactions();buildHeroDots();
+  buildFeats('ancestry-feats','ancestryFeats',['level','name','desc']);
+  buildFeats('class-feats','classFeats',['level','name','desc']);
+  buildFeats('skill-feats','skillFeats',['level','name','skill','desc']);
+  buildFeats('general-feats','generalFeats',['level','name','desc']);
+  buildFeats('class-features','classFeatures',['name','level','desc']);
+  buildWeapons();buildInventory();buildRituals();
+  buildSpellProf();buildFocusDots();buildFocusSpells();buildCantrips();
+  buildSpellSlots();buildInnateSpells();
+  buildNameDescRows('allies-container','allies',6);
+  buildNameDescRows('orgs-container','orgs',4);
+  buildNameDescRows('enemies-container','enemies',4);
+  populateAll();
+  recalcAll();
+}
+
+function createProfSelector(containerId,dataKey,onChange){
+  const c=document.getElementById(containerId);c.innerHTML='';
+  const current=(typeof dataKey==='function')?dataKey():getNestedValue(CD,dataKey);
+  PROF_RANKS.forEach(r=>{
+    const b=document.createElement('button');b.className='prof-btn'+(current===r?' active':'');
+    b.textContent=r;b.type='button';
+    b.addEventListener('click',()=>{
+      c.querySelectorAll('.prof-btn').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      if(typeof dataKey==='function'){onChange(r);}else{setNestedValue(CD,dataKey,r);}
+      if(onChange)onChange(r);
+      saveData();recalcAll();
+    });
+    c.appendChild(b);
+  });
+}
+function getNestedValue(obj,path){const p=path.split('.');let v=obj;for(const k of p)v=v?.[k];return v;}
+function setNestedValue(obj,path,val){const p=path.split('.');let v=obj;for(let i=0;i<p.length-1;i++)v=v[p[i]];v[p[p.length-1]]=val;}
+
+function buildAbilities(){
+  const g=document.getElementById('ability-grid');g.innerHTML='';
+  ABILITIES.forEach(ab=>{
+    const scoreVal = CD.abilityScores[ab] || 10;
+    const modVal = getMod(ab);
+    const d=document.createElement('div');
+    d.className='ability-card';
+    d.innerHTML=`<div class="ab-label">${ab}</div>
+      <div class="ab-sublabel">Score</div>
+      <input type="number" min="1" max="30" value="${scoreVal}" class="field-input ab-input" data-ability-score="${ab}" />
+      <div class="ab-sublabel">Modifier</div>
+      <div class="ab-mod-display" id="mod-display-${ab}">${fmtMod(modVal)}</div>`;
+    g.appendChild(d);
+    d.querySelector('input').addEventListener('input',function(){
+      const v = parseInt(this.value);
+      CD.abilityScores[ab] = isNaN(v) ? 10 : Math.max(1, Math.min(30, v));
+      CD.abilityMods[ab] = getMod(ab);
+      document.getElementById('mod-display-'+ab).textContent = fmtMod(CD.abilityMods[ab]);
+      saveData();recalcAll();
+    });
+  });
+}
+
+function buildDyingDots(){
+  const c=document.getElementById('dying-dots');c.innerHTML='';
+  for(let i=0;i<4;i++){
+    const b=document.createElement('button');b.className='dot-btn'+(i<CD.dying?' filled':'');b.type='button';
+    b.addEventListener('click',()=>{CD.dying=CD.dying===(i+1)?i:(i+1);buildDyingDots();saveData();});
+    c.appendChild(b);
+  }
+}
+
+function buildSaves(){
+  const g=document.getElementById('saves-grid');g.innerHTML='';
+  const saves=[{name:'Fortitude',key:'fortitude',abil:'CON'},{name:'Reflex',key:'reflex',abil:'DEX'},{name:'Will',key:'will',abil:'WIS'}];
+  saves.forEach(s=>{
+    const d=document.createElement('div');d.className='bg-bg rounded-lg p-3 border border-border';
+    d.innerHTML=`<div class="flex items-center justify-between mb-2">
+        <span class="cinzel text-xs uppercase tracking-wider text-crimson-light">${s.name} (${s.abil})</span>
+        <span class="mod-display text-xl" id="save-total-${s.key}">+0</span>
+      </div>
+      <div class="flex gap-1 mb-2" id="save-prof-${s.key}"></div>
+      <div class="grid grid-cols-3 gap-1">
+        <div><label class="text-[9px] text-txt-muted uppercase">Item</label><input type="number" value="${CD.saves[s.key].item}" class="field-input w-full num-input" data-save="${s.key}" data-field="item" /></div>
+        <div><label class="text-[9px] text-txt-muted uppercase">Status</label><input type="number" value="${CD.saves[s.key].status}" class="field-input w-full num-input" data-save="${s.key}" data-field="status" /></div>
+        <div><label class="text-[9px] text-txt-muted uppercase">Circ</label><input type="number" value="${CD.saves[s.key].circ}" class="field-input w-full num-input" data-save="${s.key}" data-field="circ" /></div>
+      </div>`;
+    g.appendChild(d);
+    createProfSelector(`save-prof-${s.key}`,`saves.${s.key}.prof`,()=>recalcAll());
+    d.querySelectorAll('input[data-save]').forEach(inp=>{
+      inp.addEventListener('input',function(){
+        CD.saves[this.dataset.save][this.dataset.field]=parseInt(this.value)||0;saveData();recalcAll();
+      });
+    });
+  });
+}
+
+function buildPerceptionProf(){createProfSelector('perception-prof','perception_prof',()=>recalcAll());}
+function buildACProf(){createProfSelector('ac-prof','ac_prof',()=>recalcAll());}
+function buildSpellProf(){createProfSelector('spell-prof','spell_prof',()=>recalcAll());}
+
+function buildSkills(){
+  const tb=document.getElementById('skills-body');tb.innerHTML='';
+  SKILLS_DATA.forEach((s,i)=>{
+    const k=s.name.replace(/\s/g,'_');
+    const tr=document.createElement('tr');
+    tr.className='border-b border-border/50 hover:bg-bg/50';
+    let nameCell;
+    if(s.lore){
+      const loreFld=s.name==='Lore 1'?'loreName1':'loreName2';
+      nameCell=`<td class="py-1.5 px-1 flex items-center gap-1"><span class="text-txt-muted text-xs">Lore:</span><input class="field-input text-sm" style="width:100px;" value="${CD[loreFld]||''}" data-lore="${loreFld}" />${s.trained?'<span class="text-crimson-light text-xs">★</span>':''}</td>`;
+    } else {
+      nameCell=`<td class="py-1.5 px-1 font-medium text-sm">${s.name} ${s.trained?'<span class="text-crimson-light text-xs">★</span>':''}</td>`;
+    }
+    tr.innerHTML=`<td class="py-1.5 px-1"><div class="flex gap-0.5" id="skill-prof-${k}"></div></td>
+      ${nameCell}
+      <td class="text-center py-1.5 px-1 text-xs text-txt-muted">${s.key}</td>
+      <td class="text-center py-1.5 px-1 text-sm" id="skill-abil-${k}">0</td>
+      <td class="text-center py-1.5 px-1 text-sm" id="skill-profb-${k}">0</td>
+      <td class="text-center py-1.5 px-1"><input type="number" value="${CD.skillItems[k]||0}" class="field-input num-input text-xs" style="width:50px;" data-skill-item="${k}" /></td>
+      <td class="text-center py-1.5 px-1"><input type="number" value="${CD.skillOther[k]||0}" class="field-input num-input text-xs" style="width:50px;" data-skill-other="${k}" /></td>
+      <td class="text-center py-1.5 px-1 font-bold text-sm" id="skill-total-${k}">+0</td>`;
+    tb.appendChild(tr);
+    createProfSelector(`skill-prof-${k}`,`skills.${k}`,()=>recalcAll());
+    const loreInput=tr.querySelector('[data-lore]');
+    if(loreInput){loreInput.addEventListener('input',function(){CD[this.dataset.lore]=this.value;saveData();});}
+    tr.querySelectorAll('[data-skill-item]').forEach(inp=>inp.addEventListener('input',function(){CD.skillItems[this.dataset.skillItem]=parseInt(this.value)||0;saveData();recalcAll();}));
+    tr.querySelectorAll('[data-skill-other]').forEach(inp=>inp.addEventListener('input',function(){CD.skillOther[this.dataset.skillOther]=parseInt(this.value)||0;saveData();recalcAll();}));
+  });
+}
+
+function buildStrikes(){
+  const c=document.getElementById('strikes-container');c.innerHTML='';
+  for(let i=0;i<3;i++){
+    const s=CD.strikes[i];
+    const d=document.createElement('div');d.className='bg-bg rounded-lg p-3 border border-border';
+    d.innerHTML=`<div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+      <div class="col-span-2"><label class="text-[9px] text-txt-muted uppercase">Weapon Name</label><input class="field-input w-full" value="${s.name}" data-strike="${i}" data-f="name" /></div>
+      <div><label class="text-[9px] text-txt-muted uppercase">Atk Bonus</label><input type="number" class="field-input w-full num-input" value="${s.atk}" data-strike="${i}" data-f="atk" /></div>
+      <div><label class="text-[9px] text-txt-muted uppercase">Dmg Dice</label><input class="field-input w-full" value="${s.dmgDice}" data-strike="${i}" data-f="dmgDice" placeholder="1d8" /></div>
+      <div><label class="text-[9px] text-txt-muted uppercase">Dmg Bonus</label><input type="number" class="field-input w-full num-input" value="${s.dmgBonus}" data-strike="${i}" data-f="dmgBonus" /></div>
+      <div><label class="text-[9px] text-txt-muted uppercase">Type</label><input class="field-input w-full" value="${s.dmgType}" data-strike="${i}" data-f="dmgType" placeholder="slashing" /></div>
+      <div><label class="text-[9px] text-txt-muted uppercase">Range/Reach</label><input class="field-input w-full" value="${s.range}" data-strike="${i}" data-f="range" /></div>
+      <div><label class="text-[9px] text-txt-muted uppercase">Traits</label><input class="field-input w-full" value="${s.traits}" data-strike="${i}" data-f="traits" /></div>
+    </div>
+    <div class="mt-2 flex flex-wrap gap-3 items-center">
+      <span class="text-[10px] text-txt-muted">MAP: <span class="text-crimson-light font-bold">${fmtMod((s.atk||0)-5)} / ${fmtMod((s.atk||0)-10)}</span></span>
+      <div class="flex-1"><label class="text-[9px] text-txt-muted uppercase">Notes</label><input class="field-input w-full text-xs" value="${s.notes}" data-strike="${i}" data-f="notes" /></div>
+    </div>`;
+    c.appendChild(d);
+    d.querySelectorAll('[data-strike]').forEach(inp=>{
+      inp.addEventListener('input',function(){
+        const idx=parseInt(this.dataset.strike);const f=this.dataset.f;
+        CD.strikes[idx][f]=(this.type==='number'?parseInt(this.value)||0:this.value);
+        saveData();if(f==='atk')buildStrikes();
+      });
+    });
+  }
+}
+
+function buildReactions(){
+  const c=document.getElementById('reactions-container');c.innerHTML='';
+  for(let i=0;i<6;i++){
+    const r=CD.reactions[i];
+    const d=document.createElement('div');d.className='grid grid-cols-2 sm:grid-cols-4 gap-2';
+    d.innerHTML=`<div><input class="field-input w-full text-xs" value="${r.name}" placeholder="Name" data-react="${i}" data-f="name" /></div>
+      <div><select class="field-input w-full text-xs" data-react="${i}" data-f="actions">
+        <option${r.actions==='◆'?' selected':''}>◆</option><option${r.actions==='◆◆'?' selected':''}>◆◆</option><option${r.actions==='◆◆◆'?' selected':''}>◆◆◆</option><option${r.actions==='↺'?' selected':''}>↺</option><option${r.actions==='◇'?' selected':''}>◇</option>
+      </select></div>
+      <div><input class="field-input w-full text-xs" value="${r.trigger}" placeholder="Trigger" data-react="${i}" data-f="trigger" /></div>
+      <div><input class="field-input w-full text-xs" value="${r.desc}" placeholder="Description" data-react="${i}" data-f="desc" /></div>`;
+    c.appendChild(d);
+    d.querySelectorAll('[data-react]').forEach(inp=>{
+      inp.addEventListener('input',function(){CD.reactions[parseInt(this.dataset.react)][this.dataset.f]=this.value;saveData();});
+      inp.addEventListener('change',function(){CD.reactions[parseInt(this.dataset.react)][this.dataset.f]=this.value;saveData();});
+    });
+  }
+}
+
+function buildHeroDots(){
+  const c=document.getElementById('hero-dots');c.innerHTML='';
+  for(let i=0;i<3;i++){
+    const b=document.createElement('button');b.className='dot-btn'+(i<CD.heroPoints?' filled':'');b.type='button';
+    b.addEventListener('click',()=>{CD.heroPoints=CD.heroPoints===(i+1)?i:(i+1);buildHeroDots();saveData();});
+    c.appendChild(b);
+  }
+}
+
+function buildFeats(containerId,dataKey,fields){
+  const c=document.getElementById(containerId);c.innerHTML='';
+  const arr=CD[dataKey];
+  arr.forEach((item,i)=>{
+    const d=document.createElement('div');
+    d.className='grid gap-1';
+    d.style.gridTemplateColumns=fields.map(f=>f==='desc'?'1fr':f==='level'?'50px':f==='skill'?'90px':'1fr').join(' ');
+    let html='';
+    fields.forEach(f=>{
+      const ph=f.charAt(0).toUpperCase()+f.slice(1);
+      const type=f==='level'?'number':'text';
+      const cls=f==='level'?'num-input':'';
+      html+=`<input type="${type}" class="field-input text-xs ${cls}" value="${item[f]||''}" placeholder="${ph}" data-feat="${dataKey}" data-idx="${i}" data-f="${f}" />`;
+    });
+    d.innerHTML=html;c.appendChild(d);
+    d.querySelectorAll('[data-feat]').forEach(inp=>{
+      inp.addEventListener('input',function(){
+        CD[this.dataset.feat][parseInt(this.dataset.idx)][this.dataset.f]=this.type==='number'?parseInt(this.value)||'':this.value;saveData();
+      });
+    });
+  });
+}
+
+function buildWeapons(){
+  const c=document.getElementById('weapons-container');c.innerHTML='';
+  CD.weapons.forEach((w,i)=>{
+    const d=document.createElement('div');d.className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2';
+    d.innerHTML=`<div><input class="field-input w-full text-xs" value="${w.name}" placeholder="Name" data-wpn="${i}" data-f="name" /></div>
+      <div><input class="field-input w-full text-xs" value="${w.category}" placeholder="Category" data-wpn="${i}" data-f="category" /></div>
+      <div><input class="field-input w-full text-xs" value="${w.damage}" placeholder="Damage" data-wpn="${i}" data-f="damage" /></div>
+      <div><input class="field-input w-full text-xs" value="${w.traits}" placeholder="Traits" data-wpn="${i}" data-f="traits" /></div>
+      <div><input type="number" class="field-input w-full num-input text-xs" value="${w.bulk}" placeholder="Bulk" data-wpn="${i}" data-f="bulk" /></div>
+      <div><input class="field-input w-full text-xs" value="${w.runes}" placeholder="Runes" data-wpn="${i}" data-f="runes" /></div>`;
+    c.appendChild(d);
+    d.querySelectorAll('[data-wpn]').forEach(inp=>{
+      inp.addEventListener('input',function(){
+        const idx=parseInt(this.dataset.wpn);CD.weapons[idx][this.dataset.f]=this.type==='number'?parseFloat(this.value)||0:this.value;saveData();recalcBulk();
+      });
+    });
+  });
+}
+
+function buildInventory(){
+  const tb=document.getElementById('inventory-body');tb.innerHTML='';
+  CD.inventory.forEach((item,i)=>{
+    const tr=document.createElement('tr');tr.className='border-b border-border/30';
+    tr.innerHTML=`<td class="py-1 px-1"><input class="field-input w-full text-xs" value="${item.name}" placeholder="Item" data-inv="${i}" data-f="name" /></td>
+      <td class="py-1 px-1"><input type="number" min="0" class="field-input num-input text-xs" value="${item.qty}" data-inv="${i}" data-f="qty" /></td>
+      <td class="py-1 px-1"><input type="number" min="0" step="0.1" class="field-input num-input text-xs" value="${item.bulk}" data-inv="${i}" data-f="bulk" /></td>
+      <td class="py-1 px-1"><input class="field-input text-xs" style="width:70px;" value="${item.value}" data-inv="${i}" data-f="value" /></td>
+      <td class="py-1 px-1"><input class="field-input w-full text-xs" value="${item.desc}" placeholder="Description" data-inv="${i}" data-f="desc" /></td>`;
+    tb.appendChild(tr);
+    tr.querySelectorAll('[data-inv]').forEach(inp=>{
+      inp.addEventListener('input',function(){
+        const idx=parseInt(this.dataset.inv);const f=this.dataset.f;
+        CD.inventory[idx][f]=(f==='qty'||f==='bulk')?parseFloat(this.value)||0:this.value;
+        saveData();recalcBulk();
+      });
+    });
+  });
+}
+
+function buildRituals(){
+  const tb=document.getElementById('rituals-body');tb.innerHTML='';
+  const fields=['name','level','castTime','cost','primary','secondary','traits','effect'];
+  CD.rituals.forEach((r,i)=>{
+    const tr=document.createElement('tr');tr.className='border-b border-border/30';
+    let html='';
+    fields.forEach(f=>{
+      const type=f==='level'?'number':'text';
+      const cls=f==='level'?'num-input':'';
+      const style=f==='effect'?'min-width:120px;':'';
+      html+=`<td class="py-1 px-1"><input type="${type}" class="field-input w-full text-xs ${cls}" style="${style}" value="${r[f]||''}" data-rit="${i}" data-f="${f}" /></td>`;
+    });
+    tr.innerHTML=html;tb.appendChild(tr);
+    tr.querySelectorAll('[data-rit]').forEach(inp=>{
+      inp.addEventListener('input',function(){
+        CD.rituals[parseInt(this.dataset.rit)][this.dataset.f]=this.type==='number'?parseInt(this.value)||'':this.value;saveData();
+      });
+    });
+  });
+}
+
+function buildFocusDots(){
+  const c=document.getElementById('focus-dots');c.innerHTML='';
+  const max=Math.min(parseInt(CD.focus_max)||1,3);
+  for(let i=0;i<max;i++){
+    const b=document.createElement('button');b.className='dot-btn'+(i<CD.focus_current?' filled':'');b.type='button';
+    b.addEventListener('click',()=>{CD.focus_current=CD.focus_current===(i+1)?i:(i+1);buildFocusDots();saveData();});
+    c.appendChild(b);
+  }
+}
+
+function buildFocusSpells(){
+  const c=document.getElementById('focus-spells-container');c.innerHTML='';
+  CD.focusSpells.forEach((s,i)=>{
+    const d=document.createElement('div');d.className='grid grid-cols-2 sm:grid-cols-4 gap-2';
+    d.innerHTML=`<input class="field-input text-xs" value="${s.name}" placeholder="Spell Name" data-fs="${i}" data-f="name" />
+      <input class="field-input text-xs" value="${s.actions}" placeholder="Actions" data-fs="${i}" data-f="actions" />
+      <input class="field-input text-xs" value="${s.traits}" placeholder="Traits" data-fs="${i}" data-f="traits" />
+      <input class="field-input text-xs" value="${s.desc}" placeholder="Description" data-fs="${i}" data-f="desc" />`;
+    c.appendChild(d);
+    d.querySelectorAll('[data-fs]').forEach(inp=>{
+      inp.addEventListener('input',function(){CD.focusSpells[parseInt(this.dataset.fs)][this.dataset.f]=this.value;saveData();});
+    });
+  });
+}
+
+function buildCantrips(){
+  const c=document.getElementById('cantrips-container');c.innerHTML='';
+  CD.cantrips.forEach((s,i)=>{
+    const d=document.createElement('div');d.className='grid grid-cols-2 sm:grid-cols-5 gap-2';
+    d.innerHTML=`<input class="field-input text-xs" value="${s.name}" placeholder="Spell Name" data-cantrip="${i}" data-f="name" />
+      <input class="field-input text-xs" value="${s.actions}" placeholder="Actions" data-cantrip="${i}" data-f="actions" />
+      <input class="field-input text-xs" value="${s.heightened}" placeholder="Heightened" data-cantrip="${i}" data-f="heightened" />
+      <input class="field-input text-xs" value="${s.traits}" placeholder="Traits" data-cantrip="${i}" data-f="traits" />
+      <input class="field-input text-xs" value="${s.desc}" placeholder="Description" data-cantrip="${i}" data-f="desc" />`;
+    c.appendChild(d);
+    d.querySelectorAll('[data-cantrip]').forEach(inp=>{
+      inp.addEventListener('input',function(){CD.cantrips[parseInt(this.dataset.cantrip)][this.dataset.f]=this.value;saveData();});
+    });
+  });
+}
+
+function buildSpellSlots(){
+  const c=document.getElementById('spell-slots-container');c.innerHTML='';
+  for(let lvl=1;lvl<=10;lvl++){
+    const key='lvl'+lvl;
+    const ss=CD.spellSlots[key]||{total:0,used:0};
+    const d=document.createElement('div');d.className='bg-bg rounded p-3 border border-border';
+    let dotsHtml='<div class="flex gap-1 flex-wrap mt-1" id="slot-dots-'+key+'">';
+    for(let j=0;j<Math.max(ss.total,0);j++){
+      dotsHtml+=`<button class="dot-btn${j<ss.used?' filled':''}" data-slot="${key}" data-dot="${j}" type="button"></button>`;
+    }
+    dotsHtml+='</div>';
+    d.innerHTML=`<div class="flex items-center gap-3 flex-wrap">
+      <span class="cinzel text-xs text-crimson-light font-bold min-w-[60px]">Level ${lvl}</span>
+      <label class="text-[9px] text-txt-muted">Slots:</label><input type="number" min="0" max="10" value="${ss.total}" class="field-input num-input text-xs" style="width:50px;" data-slot-total="${key}" />
+      ${dotsHtml}
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1 mt-2">
+      ${CD.spellNames[key].map((n,ni)=>`<input class="field-input text-xs" value="${n}" placeholder="Spell ${ni+1}" data-sname="${key}" data-ni="${ni}" />`).join('')}
+    </div>`;
+    c.appendChild(d);
+    d.querySelector(`[data-slot-total="${key}"]`).addEventListener('input',function(){
+      CD.spellSlots[key].total=Math.max(0,parseInt(this.value)||0);
+      CD.spellSlots[key].used=Math.min(CD.spellSlots[key].used,CD.spellSlots[key].total);
+      saveData();buildSpellSlots();
+    });
+    d.querySelectorAll(`[data-slot="${key}"]`).forEach(btn=>{
+      btn.addEventListener('click',function(){
+        const di=parseInt(this.dataset.dot);
+        CD.spellSlots[key].used=CD.spellSlots[key].used===(di+1)?di:(di+1);
+        saveData();buildSpellSlots();
+      });
+    });
+    d.querySelectorAll('[data-sname]').forEach(inp=>{
+      inp.addEventListener('input',function(){CD.spellNames[this.dataset.sname][parseInt(this.dataset.ni)]=this.value;saveData();});
+    });
+  }
+}
+
+function buildInnateSpells(){
+  const c=document.getElementById('innate-spells-container');c.innerHTML='';
+  CD.innateSpells.forEach((s,i)=>{
+    const d=document.createElement('div');d.className='grid grid-cols-2 sm:grid-cols-5 gap-2';
+    d.innerHTML=`<input class="field-input text-xs" value="${s.name}" placeholder="Spell Name" data-inn="${i}" data-f="name" />
+      <input class="field-input text-xs" value="${s.level}" placeholder="Level" data-inn="${i}" data-f="level" />
+      <input class="field-input text-xs" value="${s.frequency}" placeholder="Frequency" data-inn="${i}" data-f="frequency" />
+      <input class="field-input text-xs" value="${s.dc}" placeholder="DC/Attack" data-inn="${i}" data-f="dc" />
+      <input class="field-input text-xs" value="${s.notes}" placeholder="Notes" data-inn="${i}" data-f="notes" />`;
+    c.appendChild(d);
+    d.querySelectorAll('[data-inn]').forEach(inp=>{
+      inp.addEventListener('input',function(){CD.innateSpells[parseInt(this.dataset.inn)][this.dataset.f]=this.value;saveData();});
+    });
+  });
+}
+
+function buildNameDescRows(containerId,dataKey,count){
+  const c=document.getElementById(containerId);c.innerHTML='';
+  CD[dataKey].forEach((item,i)=>{
+    const d=document.createElement('div');d.className='grid grid-cols-3 gap-2';
+    d.innerHTML=`<input class="field-input text-xs" value="${item.name}" placeholder="Name" data-nd="${dataKey}" data-idx="${i}" data-f="name" />
+      <input class="field-input text-xs col-span-2" value="${item.desc}" placeholder="Description" data-nd="${dataKey}" data-idx="${i}" data-f="desc" />`;
+    c.appendChild(d);
+    d.querySelectorAll('[data-nd]').forEach(inp=>{
+      inp.addEventListener('input',function(){CD[this.dataset.nd][parseInt(this.dataset.idx)][this.dataset.f]=this.value;saveData();});
+    });
+  });
+}
+
+// ==============================
+// POPULATE FROM DATA
+// ==============================
+function populateAll(){
+  const simpleFields=['charName','playerName','classSubclass','charLevel','xp','ancestry','heritage','background','deity','alignment','size','traits',
+    'hp_max','hp_current','hp_temp','wounded','doomed','ac_item','ac_other','ac_armor_type',
+    'shield_bonus','shield_hp','shield_hardness','shield_bt',
+    'perception_item','perception_other','senses',
+    'speed_base','speed_fly','speed_swim','speed_climb','speed_burrow',
+    'armor_name','armor_type','armor_ac','armor_maxdex','armor_check','armor_speed','armor_str','armor_bulk','armor_traits','armor_resilient','armor_rune1','armor_rune2','armor_rune3',
+    'currency_pp','currency_gp','currency_sp','currency_cp',
+    'spell_tradition','spell_type','spell_key_ability','spell_item','spell_other','spell_atk_item','spell_atk_other','focus_max',
+    'bg_boosts','bg_skills','bg_feat','bg_lore','backstory',
+    'personality_traits','personality_ideals','personality_bonds','personality_flaws',
+    'campaign_notes','misc_notes'];
+  simpleFields.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){
+      let val=CD[id];
+      if(id.startsWith('currency_'))val=CD.currency[id.replace('currency_','')];
+      else if(id.startsWith('armor_')){const k=id.replace('armor_','');val=CD.armor?.[k]??val;}
+      if(val!==undefined&&val!==null)el.value=val;
+    }
+  });
+  renderTraitChips();
+}
+
+// ==============================
+// RECALCULATE
+// ==============================
+function recalcAll(){
+  const lvl=parseInt(CD.charLevel)||1;
+  // Ability mod displays
+  ABILITIES.forEach(ab=>{
+    const el=document.getElementById('mod-display-'+ab);
+    if(el)el.textContent=fmtMod(getMod(ab));
+  });
+  // Saves
+  const saveMap={fortitude:'CON',reflex:'DEX',will:'WIS'};
+  Object.entries(saveMap).forEach(([key,abil])=>{
+    const s=CD.saves[key];
+    const total=getMod(abil)+profBonus(s.prof)+(parseInt(s.item)||0)+(parseInt(s.status)||0)+(parseInt(s.circ)||0);
+    const el=document.getElementById('save-total-'+key);if(el)el.textContent=fmtMod(total);
+  });
+  // Perception
+  const percTotal=getMod('WIS')+profBonus(CD.perception_prof)+(parseInt(CD.perception_item)||0)+(parseInt(CD.perception_other)||0);
+  const percEl=document.getElementById('perception_total');if(percEl)percEl.textContent=fmtMod(percTotal);
+  // AC
+  const dexMod=getMod('DEX');
+  const acTotal=10+dexMod+profBonus(CD.ac_prof)+(parseInt(CD.ac_item)||0)+(parseInt(CD.ac_other)||0);
+  const acEl=document.getElementById('ac_total');if(acEl)acEl.textContent=acTotal;
+  // Skills
+  SKILLS_DATA.forEach(s=>{
+    const k=s.name.replace(/\s/g,'_');
+    const abilMod=getMod(s.key);
+    const pb=profBonus(CD.skills[k]||'U');
+    const item=parseInt(CD.skillItems[k])||0;
+    const other=parseInt(CD.skillOther[k])||0;
+    const total=abilMod+pb+item+other;
+    const abilEl=document.getElementById('skill-abil-'+k);if(abilEl)abilEl.textContent=fmtMod(abilMod);
+    const profEl=document.getElementById('skill-profb-'+k);if(profEl)profEl.textContent=pb;
+    const totalEl=document.getElementById('skill-total-'+k);if(totalEl)totalEl.textContent=fmtMod(total);
+  });
+  // Spell DC & Attack
+  const spellAbil=CD.spell_key_ability||'INT';
+  const spellAbilMod=getMod(spellAbil);
+  const spellProf=profBonus(CD.spell_prof||'U');
+  const spellDC=10+spellAbilMod+spellProf+(parseInt(CD.spell_item)||0)+(parseInt(CD.spell_other)||0);
+  const spellAtk=spellAbilMod+spellProf+(parseInt(CD.spell_atk_item)||0)+(parseInt(CD.spell_atk_other)||0);
+  const dcEl=document.getElementById('spell_dc');if(dcEl)dcEl.textContent=spellDC;
+  const atkEl=document.getElementById('spell_attack');if(atkEl)atkEl.textContent=fmtMod(spellAtk);
+  // Bulk
+  recalcBulk();
+}
+
+function recalcBulk(){
+  let totalBulk=0;
+  CD.inventory.forEach(item=>{totalBulk+=(parseFloat(item.qty)||0)*(parseFloat(item.bulk)||0);});
+  CD.weapons.forEach(w=>{totalBulk+=parseFloat(w.bulk)||0;});
+  totalBulk+=parseFloat(CD.armor?.bulk)||0;
+  const strMod=getMod('STR');
+  const lightEnc=strMod+5;const maxEnc=strMod+10;
+  const bulkCurEl=document.getElementById('bulk-current');if(bulkCurEl){bulkCurEl.textContent=Math.round(totalBulk*10)/10;bulkCurEl.style.color=totalBulk>maxEnc?'#f55':totalBulk>lightEnc?'#fa5':'';}
+  const bulkLightEl=document.getElementById('bulk-light');if(bulkLightEl)bulkLightEl.textContent=lightEnc;
+  const bulkMaxEl=document.getElementById('bulk-max');if(bulkMaxEl)bulkMaxEl.textContent=maxEnc;
+  const totalBulkEl=document.getElementById('total-bulk');if(totalBulkEl)totalBulkEl.textContent=Math.round(totalBulk*10)/10;
+}
+
+function renderTraitChips(){
+  const c=document.getElementById('traits-chips');
+  const val=CD.traits||'';
+  c.innerHTML='';
+  val.split(',').map(t=>t.trim()).filter(Boolean).forEach(t=>{
+    const span=document.createElement('span');span.className='chip';span.textContent=t;c.appendChild(span);
+  });
+}
+
+// ==============================
+// EVENT WIRING
+// ==============================
+function wireSimpleInputs(){
+  const directFields=['charName','playerName','classSubclass','charLevel','xp','ancestry','heritage','background','deity','alignment','size','traits',
+    'hp_max','hp_current','hp_temp','wounded','doomed','ac_item','ac_other','ac_armor_type',
+    'shield_bonus','shield_hp','shield_hardness','shield_bt',
+    'perception_item','perception_other','senses',
+    'speed_base','speed_fly','speed_swim','speed_climb','speed_burrow',
+    'spell_tradition','spell_type','spell_key_ability','spell_item','spell_other','spell_atk_item','spell_atk_other','focus_max',
+    'bg_boosts','bg_skills','bg_feat','bg_lore','backstory',
+    'personality_traits','personality_ideals','personality_bonds','personality_flaws',
+    'campaign_notes','misc_notes'];
+  directFields.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    const evts=['input','change'];
+    evts.forEach(evt=>{
+      el.addEventListener(evt,function(){
+        const v=this.type==='number'?parseInt(this.value)||0:this.value;
+        CD[id]=v;
+        if(id==='traits')renderTraitChips();
+        if(id==='charLevel'||id.startsWith('speed'))recalcAll();
+        if(id==='focus_max')buildFocusDots();
+        saveData();recalcAll();
+      });
+    });
+  });
+  ABILITIES.forEach(ab=>{
+    const el=document.querySelector(`[data-ability-score="${ab}"]`);
+    if(el){
+      el.addEventListener('input',function(){
+        CD.abilityScores[ab]=Math.max(1,Math.min(30,parseInt(this.value)||10));
+        CD.abilityMods[ab]=getMod(ab);
+        const modEl=document.getElementById('mod-display-'+ab);
+        if(modEl)modEl.textContent=fmtMod(getMod(ab));
+        saveData();recalcAll();
+      });
+    }
+  });
+  // Currency
+  ['pp','gp','sp','cp'].forEach(c=>{
+    const el=document.getElementById('currency_'+c);
+    if(el)el.addEventListener('input',function(){CD.currency[c]=parseInt(this.value)||0;saveData();});
+  });
+  // Armor fields
+  ['name','type','ac','maxdex','check','speed','str','bulk','traits','resilient','rune1','rune2','rune3'].forEach(f=>{
+    const el=document.getElementById('armor_'+f);
+    if(el){
+      el.addEventListener('input',function(){
+        if(!CD.armor)CD.armor={};
+        CD.armor[f]=this.type==='number'?parseFloat(this.value)||0:this.value;
+        saveData();recalcBulk();
+      });
+      el.addEventListener('change',function(){
+        if(!CD.armor)CD.armor={};
+        CD.armor[f]=this.type==='number'?parseFloat(this.value)||0:this.value;
+        saveData();
+      });
+    }
+  });
+}
+
+// ==============================
+// INIT
+// ==============================
+if(typeof lucide!=="undefined"&&typeof lucide.createIcons==="function"){lucide.createIcons();}
+
+loadData();
+buildAll();
+wireSimpleInputs();
+
+// Tab switching
+document.querySelectorAll('.tab-btn-nav').forEach(btn=>{
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn-nav').forEach(b=>b.classList.remove('active'));
+    this.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
+    const target=document.getElementById('tab-'+this.dataset.tab);
+    if(target)target.classList.add('active');
+  });
+});
+
+// Print
+document.getElementById('btn-print-hdr').addEventListener('click',()=>window.print());
+
+// Reset
+document.getElementById('btn-reset-hdr').addEventListener('click',()=>{
+  document.getElementById('reset-modal').classList.remove('hidden');
+  document.getElementById('reset-modal').classList.add('flex');
+});
+document.getElementById('reset-cancel').addEventListener('click',()=>{
+  document.getElementById('reset-modal').classList.add('hidden');
+  document.getElementById('reset-modal').classList.remove('flex');
+});
+document.getElementById('reset-confirm').addEventListener('click',()=>{
+  localStorage.removeItem(STORAGE_KEY);
+  CD=getDefaultData();
+  document.getElementById('reset-modal').classList.add('hidden');
+  document.getElementById('reset-modal').classList.remove('flex');
+  buildAll();populateAll();wireSimpleInputs();recalcAll();
+});
+</script>
+</body>
+</html>
