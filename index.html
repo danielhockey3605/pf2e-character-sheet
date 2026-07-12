@@ -214,7 +214,8 @@ tailwind.config = {
 <!-- TAB NAVIGATION -->
 <nav data-id="52" id="tab-nav-bar" class="sticky top-[calc(var(--header-h,180px))] z-40 bg-bg border-b border-border">
   <div data-id="53" class="max-w-7xl mx-auto px-4 flex overflow-x-auto scroll-tabs">
-    <button data-id="54" class="tab-btn-nav active" data-tab="core">Core Stats</button>
+    <button class="tab-btn-nav active" data-tab="quick">Quick Reference</button>
+    <button data-id="54" class="tab-btn-nav" data-tab="core">Core Stats</button>
     <button data-id="55" class="tab-btn-nav" data-tab="skills">Skills</button>
     <button data-id="56" class="tab-btn-nav" data-tab="strikes">Strikes & Actions</button>
     <button data-id="57" class="tab-btn-nav" data-tab="feats">Feats & Abilities</button>
@@ -228,8 +229,56 @@ tailwind.config = {
 
 <main data-id="62" class="max-w-7xl mx-auto px-4 py-6 space-y-6">
 
+<!-- ==================== TAB 0: QUICK REFERENCE ==================== -->
+<div id="tab-quick" class="tab-content active space-y-4">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <!-- Left Column -->
+    <div class="space-y-3">
+      <div class="section-card">
+        <div class="section-title">⚔ Defense & Perception</div>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div><span class="text-[10px] text-txt-muted">AC</span><div id="qr-ac" class="text-xl font-bold">10</div></div>
+          <div><span class="text-[10px] text-txt-muted">PERC</span><div id="qr-perc" class="text-xl font-bold">+0</div></div>
+          <div><span class="text-[10px] text-txt-muted">SPD</span><div id="qr-speed" class="text-xl font-bold">25'</div></div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">⚔ Saves</div>
+        <div class="grid grid-cols-3 gap-2 text-center text-sm">
+          <div><span class="text-[9px] text-txt-muted">FORT</span><div id="qr-fort" class="text-lg font-bold">+0</div></div>
+          <div><span class="text-[9px] text-txt-muted">REF</span><div id="qr-ref" class="text-lg font-bold">+0</div></div>
+          <div><span class="text-[9px] text-txt-muted">WILL</span><div id="qr-will" class="text-lg font-bold">+0</div></div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">⚔ Movement</div>
+        <div class="text-sm space-y-1">
+          <div>Walk: <span id="qr-walk" class="font-bold">25'</span></div>
+          <div>Fly: <span id="qr-fly" class="font-bold">—</span></div>
+          <div>Swim: <span id="qr-swim" class="font-bold">—</span></div>
+          <div>Climb: <span id="qr-climb" class="font-bold">—</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- Right Column -->
+    <div class="space-y-3">
+      <div class="section-card">
+        <div class="section-title">⚔ Spell Proficiencies</div>
+        <div class="grid grid-cols-2 gap-2 text-center text-sm">
+          <div><span class="text-[9px] text-txt-muted">DC</span><div id="qr-spelldc" class="text-lg font-bold">10</div></div>
+          <div><span class="text-[9px] text-txt-muted">ATK</span><div id="qr-spellatk" class="text-lg font-bold">+0</div></div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">⚔ Trained Skills</div>
+        <div id="qr-skills" class="text-sm space-y-1"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ==================== TAB 1: CORE STATS ==================== -->
-<div data-id="63" id="tab-core" class="tab-content active space-y-6">
+<div data-id="63" id="tab-core" class="tab-content space-y-6">
 
   <!-- Ability Scores -->
   <div data-id="64" class="section-card">
@@ -1730,6 +1779,31 @@ function populateAll(){
   renderTraitChips();
 }
 
+function updateQuickReference(ac, perc, spellDC, spellAtk){
+  // Defense & Perception
+  const qrAc=document.getElementById('qr-ac');if(qrAc)qrAc.textContent=ac;
+  const qrPerc=document.getElementById('qr-perc');if(qrPerc)qrPerc.textContent=fmtMod(perc);
+  const qrSpeed=document.getElementById('qr-speed');if(qrSpeed)qrSpeed.textContent=(CD.speed_base||25)+"'";
+  // Saves
+  const qrFort=document.getElementById('qr-fort');if(qrFort)qrFort.textContent=fmtMod(getMod('CON')+profBonus(CD.saves.fortitude?.prof||'U'));
+  const qrRef=document.getElementById('qr-ref');if(qrRef)qrRef.textContent=fmtMod(getMod('DEX')+profBonus(CD.saves.reflex?.prof||'U'));
+  const qrWill=document.getElementById('qr-will');if(qrWill)qrWill.textContent=fmtMod(getMod('WIS')+profBonus(CD.saves.will?.prof||'U'));
+  // Movement
+  const qrWalk=document.getElementById('qr-walk');if(qrWalk)qrWalk.textContent=(CD.speed_base||25)+"'";
+  const qrFly=document.getElementById('qr-fly');if(qrFly)qrFly.textContent=(CD.speed_fly||0)>0?CD.speed_fly+"'":"—";
+  const qrSwim=document.getElementById('qr-swim');if(qrSwim)qrSwim.textContent=(CD.speed_swim||0)>0?CD.speed_swim+"'":"—";
+  const qrClimb=document.getElementById('qr-climb');if(qrClimb)qrClimb.textContent=(CD.speed_climb||0)>0?CD.speed_climb+"'":"—";
+  // Spells
+  const qrSpellDC=document.getElementById('qr-spelldc');if(qrSpellDC)qrSpellDC.textContent=spellDC;
+  const qrSpellAtk=document.getElementById('qr-spellatk');if(qrSpellAtk)qrSpellAtk.textContent=fmtMod(spellAtk);
+  // Trained Skills
+  const qrSkills=document.getElementById('qr-skills');
+  if(qrSkills){
+    const trained=SKILLS_DATA.filter(s=>CD.skills[s.name.replace(/\s/g,'_')]==='T').map(s=>s.name).join(', ');
+    qrSkills.innerHTML=trained?trained:'(none)';
+  }
+}
+
 // ==============================
 // RECALCULATE
 // ==============================
@@ -1780,8 +1854,21 @@ function recalcAll(){
   const spellAtk=spellAbilMod+spellProf+(parseInt(CD.spell_atk_item)||0)+(parseInt(CD.spell_atk_other)||0);
   const dcEl=document.getElementById('spell_dc');if(dcEl)dcEl.textContent=spellDC;
   const atkEl=document.getElementById('spell_attack');if(atkEl)atkEl.textContent=fmtMod(spellAtk);
+  // Strikes - auto-calculate attack bonuses
+  CD.strikes.forEach((s,i)=>{
+    const w=CD.weapons[i]||{};
+    if(!s.name)return;
+    const cat=(w.category||'').toLowerCase();
+    const ability=cat.includes('finesse')?Math.max(getMod('DEX'),getMod('STR')):cat.includes('ranged')||cat.includes('bow')||cat.includes('crossbow')?getMod('DEX'):getMod('STR');
+    const prof=cat.includes('simple')||cat.includes('martial')?'T':cat.includes('advanced')?'U':'T';
+    const rune=parseInt((w.runes||'').match(/\d+/)?.[0])||0;
+    s.atk=ability+profBonus(prof)+rune;
+  });
+  buildStrikes();
   // Bulk
   recalcBulk();
+  // Update Quick Reference
+  updateQuickReference(acTotal, percTotal, spellDC, spellAtk);
 }
 
 function recalcBulk(){
