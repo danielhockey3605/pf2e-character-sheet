@@ -221,6 +221,7 @@ tailwind.config = {
     <button data-id="58" class="tab-btn-nav" data-tab="inventory">Inventory</button>
     <button data-id="59" class="tab-btn-nav" data-tab="spells">Spellcasting</button>
     <button data-id="60" class="tab-btn-nav" data-tab="rituals">Rituals</button>
+    <button class="tab-btn-nav" data-tab="library">Library</button>
     <button data-id="61" class="tab-btn-nav" data-tab="notes">Background & Notes</button>
   </div>
 </nav>
@@ -526,7 +527,43 @@ tailwind.config = {
   </div>
 </div>
 
-<!-- ==================== TAB 8: BACKGROUND & NOTES ==================== -->
+<!-- ==================== TAB 8: LIBRARY ==================== -->
+<div id="tab-library" class="tab-content space-y-4">
+  <div class="section-card">
+    <div class="section-title">⚔ Rules Library</div>
+    <div class="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end">
+      <div class="sm:col-span-2">
+        <label class="text-[10px] text-txt-muted uppercase">Category</label>
+        <select id="lib-kind" class="field-input w-full">
+          <option value="spells">Spells</option>
+          <option value="equipment">Equipment</option>
+          <option value="feats">Feats</option>
+        </select>
+      </div>
+      <div class="sm:col-span-3">
+        <label class="text-[10px] text-txt-muted uppercase">Search</label>
+        <input id="lib-query" class="field-input w-full" placeholder="Type a name like Electric Arc, Longsword, Shield Block..." />
+      </div>
+      <div class="sm:col-span-1">
+        <button id="lib-search-btn" type="button" class="profile-btn w-full">Search</button>
+      </div>
+    </div>
+    <div id="lib-status" class="text-xs text-txt-muted mt-3">Enter at least 2 characters to search.</div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="section-card lg:col-span-1">
+      <div class="section-title">⚔ Matches</div>
+      <div id="lib-results" class="space-y-1 max-h-[420px] overflow-auto"></div>
+    </div>
+    <div class="section-card lg:col-span-2">
+      <div class="section-title">⚔ Details</div>
+      <div id="lib-detail" class="text-sm text-txt-muted whitespace-pre-wrap min-h-[260px]">Select a result to view details.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== TAB 9: BACKGROUND & NOTES ==================== -->
 <div data-id="394" id="tab-notes" class="tab-content space-y-6">
   <div data-id="395" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
     <div data-id="396" class="space-y-4">
@@ -859,6 +896,136 @@ function setDatalistOptions(id, names){
     opt.value = n;
     dl.appendChild(opt);
   });
+}
+
+function summarizeRow(kind, row){
+  if(kind === 'spells'){
+    const rank = row.rank !== undefined && row.rank !== null ? `Rank ${row.rank}` : 'Rank ?';
+    const tr = row.traditions || '';
+    return `${row.name} - ${rank}${tr ? ` - ${tr}` : ''}`;
+  }
+  if(kind === 'equipment'){
+    const lvl = row.level !== undefined && row.level !== null ? `Lvl ${row.level}` : 'Lvl ?';
+    const tp = row.item_type || row.category || 'item';
+    return `${row.name} - ${tp} - ${lvl}`;
+  }
+  const lvl = row.level !== undefined && row.level !== null ? `Lvl ${row.level}` : 'Lvl ?';
+  const tp = row.feat_type || 'feat';
+  return `${row.name} - ${tp} - ${lvl}`;
+}
+
+function formatDetail(kind, row){
+  if(!row)return 'No detail found.';
+  if(kind === 'spells'){
+    return [
+      `Name: ${row.name || ''}`,
+      `Rank: ${row.rank ?? ''}`,
+      `Type: ${row.spell_type || ''}`,
+      `Traditions: ${row.traditions || ''}`,
+      `Traits: ${row.traits || ''}`,
+      `Cast Time: ${row.cast_time || ''}`,
+      `Range: ${row.range || ''}`,
+      `Duration: ${row.duration || ''}`,
+      `Damage: ${row.damage || ''}`,
+      '',
+      row.description || '',
+    ].join('\n');
+  }
+  if(kind === 'equipment'){
+    return [
+      `Name: ${row.name || ''}`,
+      `Type: ${row.item_type || ''}`,
+      `Category: ${row.category || ''}`,
+      `Level: ${row.level ?? ''}`,
+      `Price: ${row.price || ''}`,
+      `Bulk: ${row.bulk ?? ''}`,
+      `Damage: ${row.damage || ''}`,
+      `Traits: ${row.traits || ''}`,
+      `Proficiency: ${row.proficiency_category || ''}`,
+      `Range: ${row.range || ''}`,
+      `Reload: ${row.reload || ''}`,
+      `AC Bonus: ${row.ac_bonus ?? ''}`,
+      `DEX Cap: ${row.dex_cap ?? ''}`,
+      `Check Penalty: ${row.check_penalty ?? ''}`,
+      `Speed Penalty: ${row.speed_penalty ?? ''}`,
+      `Strength Req: ${row.strength_req ?? ''}`,
+      '',
+      row.description || '',
+    ].join('\n');
+  }
+  return [
+    `Name: ${row.name || ''}`,
+    `Type: ${row.feat_type || ''}`,
+    `Level: ${row.level ?? ''}`,
+    `Traits: ${row.traits || ''}`,
+    `Prerequisites: ${row.prerequisites || ''}`,
+    `Action Type: ${row.action_type || ''}`,
+    `Actions: ${row.actions || ''}`,
+    '',
+    row.description || '',
+  ].join('\n');
+}
+
+async function runLibrarySearch(){
+  const kindEl = document.getElementById('lib-kind');
+  const queryEl = document.getElementById('lib-query');
+  const statusEl = document.getElementById('lib-status');
+  const resultsEl = document.getElementById('lib-results');
+  const detailEl = document.getElementById('lib-detail');
+  if(!kindEl || !queryEl || !statusEl || !resultsEl || !detailEl)return;
+
+  const kind = kindEl.value;
+  const q = (queryEl.value || '').trim();
+  resultsEl.innerHTML = '';
+  detailEl.textContent = 'Select a result to view details.';
+
+  if(q.length < 2){
+    statusEl.textContent = 'Enter at least 2 characters to search.';
+    return;
+  }
+
+  statusEl.textContent = 'Searching...';
+  const rows = await fetchReferenceList(kind, q, 80);
+  if(!rows.length){
+    statusEl.textContent = 'No results found.';
+    return;
+  }
+
+  statusEl.textContent = `${rows.length} result(s)`;
+  rows.forEach(row=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'profile-btn w-full text-left';
+    btn.style.whiteSpace = 'normal';
+    btn.textContent = summarizeRow(kind, row);
+    btn.addEventListener('click', async ()=>{
+      let detail = row;
+      if(row?.name){
+        const looked = await fetchReferenceLookup(kind, row.name);
+        if(looked)detail = looked;
+      }
+      detailEl.textContent = formatDetail(kind, detail);
+    });
+    resultsEl.appendChild(btn);
+  });
+}
+
+function wireLibraryTab(){
+  const btn = document.getElementById('lib-search-btn');
+  const query = document.getElementById('lib-query');
+  const kind = document.getElementById('lib-kind');
+  if(btn && !btn.dataset.wired){
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', ()=>{ runLibrarySearch(); });
+  }
+  if(query && !query.dataset.wired){
+    query.dataset.wired = '1';
+    query.addEventListener('keydown', (e)=>{ if(e.key === 'Enter')runLibrarySearch(); });
+  }
+  if(kind && !kind.dataset.wired){
+    kind.dataset.wired = '1';
+    kind.addEventListener('change', ()=>{ runLibrarySearch(); });
+  }
 }
 
 function wireAutocompleteInput(inp, datalistId, kind){
@@ -1692,6 +1859,7 @@ loadProfiles();
 loadData();
 buildAll();
 wireSimpleInputs();
+wireLibraryTab();
 renderProfileControls();
 attachProfileControls();
 
