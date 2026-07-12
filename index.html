@@ -110,6 +110,39 @@ tailwind.config = {
   .ability-card .ab-sublabel { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--txt-muted); }
   .ability-card .ab-mod-display { font-size: 28px; font-weight: 700; font-family: 'Cinzel', serif; color: var(--crimson-light); line-height: 1.1; }
   .ability-card .ab-input { width: 60px; text-align: center; }
+  .profile-select {
+    background: var(--input-bg);
+    color: var(--txt);
+    border: 1px solid var(--border-input);
+    border-radius: 6px;
+    font-size: 12px;
+    padding: 5px 8px;
+    min-width: 190px;
+  }
+  .profile-btn {
+    background: var(--bg);
+    color: var(--txt);
+    border: 1px solid var(--border-input);
+    border-radius: 6px;
+    font-size: 12px;
+    padding: 5px 8px;
+    cursor: pointer;
+  }
+  .profile-btn:hover { border-color: var(--crimson-light); }
+  .sync-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border-input);
+    font-size: 12px;
+    color: var(--txt-muted);
+    background: var(--bg);
+  }
+  .sync-pill[data-state="synced"] { color: #7df5a8; border-color: #2f6a48; }
+  .sync-pill[data-state="pending"] { color: #ffd27a; border-color: #6b562e; }
+  .sync-pill[data-state="error"] { color: #ff9d9d; border-color: #7a2c2c; }
 
   @media print {
     body { background: #fff !important; color: #000 !important; font-size: 9pt; }
@@ -127,6 +160,8 @@ tailwind.config = {
     .dot-btn { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
     .dot-btn.filled { background: #333 !important; }
     .ability-card .ab-mod-display { color: #333 !important; }
+    #profile-controls { display: none !important; }
+    #sync-pill { display: none !important; }
     * { color-adjust: exact; -webkit-print-color-adjust: exact; }
   }
 </style>
@@ -139,6 +174,14 @@ tailwind.config = {
   <div data-id="3" class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
     <div data-id="4" id="logo-text" class="cinzel text-lg md:text-xl font-bold tracking-wider text-crimson-light flex items-center gap-2">⚔ PATHFINDER REMASTER</div>
     <div data-id="5" id="header-buttons" class="flex items-center gap-2">
+      <div id="profile-controls" class="flex items-center gap-2">
+        <select id="profile-select" class="profile-select" title="Select local character profile"></select>
+        <button id="profile-new" type="button" class="profile-btn" title="Create a new local character profile">+ New</button>
+      </div>
+      <div id="sync-pill" class="sync-pill" data-state="pending" title="Local save always works. Cloud sync depends on API connectivity.">
+        <span id="sync-icon">◌</span>
+        <span id="sync-text">Local only</span>
+      </div>
       <button data-id="6" id="btn-print-hdr" class="flex items-center gap-1 px-3 py-1.5 bg-bg-card border border-border rounded text-sm hover:border-crimson-light transition-colors" title="Print / Export PDF"><i data-id="7" data-lucide="printer" class="w-4 h-4"></i><span data-id="8" class="hidden sm:inline ml-1">Print</span></button>
       <button data-id="9" id="btn-reset-hdr" class="flex items-center gap-1 px-3 py-1.5 bg-bg-card border border-border rounded text-sm hover:border-crimson-light transition-colors" title="Reset Sheet"><i data-id="10" data-lucide="rotate-ccw" class="w-4 h-4"></i><span data-id="11" class="hidden sm:inline ml-1">Reset</span></button>
     </div>
@@ -543,6 +586,10 @@ tailwind.config = {
 
 <div data-id="447" id="save-toast" class="toast">Auto-saved ✓</div>
 
+<datalist id="ref-spells-list"></datalist>
+<datalist id="ref-equipment-list"></datalist>
+<datalist id="ref-feats-list"></datalist>
+
 <!-- Confirmation Modal -->
 <div data-id="448" id="reset-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center bg-black/60">
   <div data-id="449" class="section-card max-w-sm mx-4 p-6 text-center">
@@ -560,9 +607,17 @@ tailwind.config = {
 // STATE & CONSTANTS
 // ==============================
 const STORAGE_KEY = 'pf2e-remaster-sheet';
+const STORAGE_PROFILE_INDEX_KEY = 'pf2e-remaster-profiles';
+const STORAGE_ACTIVE_PROFILE_KEY = 'pf2e-remaster-active-profile';
+const STORAGE_API_URL_KEY = 'pf2e-remaster-api-url';
 const ABILITIES = ['STR','DEX','CON','INT','WIS','CHA'];
 const PROF_RANKS = ['U','T','E','M','L'];
 const PROF_VALUES = {U:0,T:2,E:4,M:6,L:8};
+const qs = new URLSearchParams(window.location.search);
+const CHARACTER_ID = parseInt(qs.get('character_id') || '0') || 0;
+const API_URL_PARAM = (qs.get('api_url') || '').trim();
+const API_BASE = normalizeApiBase(API_URL_PARAM || localStorage.getItem(STORAGE_API_URL_KEY) || '');
+const SYNC_INTERVAL_MS = 15000;
 const SKILLS_DATA = [
   {name:'Acrobatics',key:'DEX',trained:false},
   {name:'Arcana',key:'INT',trained:true},
@@ -585,6 +640,381 @@ const SKILLS_DATA = [
 ];
 
 let CD = getDefaultData();
+let saveTimeout;
+let syncTimeout;
+let syncInterval;
+let simpleInputsWired = false;
+let hasPendingRemoteChanges = false;
+let profiles = [];
+let activeProfileId = '';
+let activeCharacterId = CHARACTER_ID;
+let effectiveStorageKey = STORAGE_KEY;
+let referenceDebounce = null;
+
+function normalizeApiBase(raw){
+  if(!raw)return '';
+  return raw.replace(/\/+$/, '');
+}
+
+function scoreToMod(score){
+  const n = parseInt(score);
+  if(Number.isNaN(n))return 0;
+  return Math.floor((n - 10) / 2);
+}
+
+function modToScore(mod){
+  const n = parseInt(mod);
+  if(Number.isNaN(n))return 10;
+  return 10 + (n * 2);
+}
+
+function getAbilityScoresFromMods(){
+  const out = {};
+  ABILITIES.forEach(ab=>{ out[ab] = modToScore(CD.abilityMods?.[ab] || 0); });
+  return out;
+}
+
+function applyAbilityScoresToMods(abilityScores){
+  if(!abilityScores || typeof abilityScores !== 'object')return;
+  ABILITIES.forEach(ab=>{
+    if(abilityScores[ab] !== undefined && abilityScores[ab] !== null){
+      CD.abilityMods[ab] = scoreToMod(abilityScores[ab]);
+    }
+  });
+}
+
+function setSyncStatus(state, text){
+  const pill = document.getElementById('sync-pill');
+  const icon = document.getElementById('sync-icon');
+  const label = document.getElementById('sync-text');
+  if(!pill || !icon || !label)return;
+  pill.dataset.state = state;
+  label.textContent = text;
+  if(state === 'synced')icon.textContent = '✓';
+  else if(state === 'pending')icon.textContent = '↻';
+  else icon.textContent = '!';
+}
+
+function makeDefaultProfileId(){
+  return `char-${Date.now()}`;
+}
+
+function defaultProfileName(){
+  return 'Character 1';
+}
+
+function getProfileStorageKey(profileId){
+  return `${STORAGE_KEY}-${profileId}`;
+}
+
+function loadProfiles(){
+  let loaded = [];
+  try{
+    const raw = localStorage.getItem(STORAGE_PROFILE_INDEX_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(Array.isArray(parsed)){
+        loaded = parsed.filter(p=>p && p.id).map(p=>({
+          id: String(p.id),
+          name: String(p.name || 'Character'),
+          characterId: parseInt(p.characterId || 0) || 0,
+        }));
+      }
+    }
+  }catch(_e){ loaded = []; }
+
+  if(loaded.length === 0){
+    loaded = [{ id: makeDefaultProfileId(), name: defaultProfileName(), characterId: CHARACTER_ID || 0 }];
+  }
+
+  profiles = loaded;
+
+  let savedActive = '';
+  try{ savedActive = localStorage.getItem(STORAGE_ACTIVE_PROFILE_KEY) || ''; }catch(_e){ savedActive = ''; }
+
+  const fromQuery = qs.get('profile') || '';
+  const candidate = fromQuery || savedActive;
+  const exists = profiles.find(p=>p.id === candidate);
+  activeProfileId = exists ? exists.id : profiles[0].id;
+  const active = getActiveProfile();
+  activeCharacterId = active?.characterId || CHARACTER_ID || 0;
+  effectiveStorageKey = getProfileStorageKey(activeProfileId);
+}
+
+function saveProfiles(){
+  try{ localStorage.setItem(STORAGE_PROFILE_INDEX_KEY, JSON.stringify(profiles)); }catch(_e){}
+  try{ localStorage.setItem(STORAGE_ACTIVE_PROFILE_KEY, activeProfileId); }catch(_e){}
+}
+
+function getActiveProfile(){
+  return profiles.find(p=>p.id === activeProfileId);
+}
+
+function renderProfileControls(){
+  const select = document.getElementById('profile-select');
+  if(!select)return;
+  select.innerHTML = '';
+  profiles.forEach(p=>{
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    const suffix = p.characterId ? ` (#${p.characterId})` : '';
+    opt.textContent = `${p.name}${suffix}`;
+    if(p.id === activeProfileId)opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
+function nextCharacterName(){
+  const n = profiles.length + 1;
+  return `Character ${n}`;
+}
+
+function attachProfileControls(){
+  const select = document.getElementById('profile-select');
+  const addBtn = document.getElementById('profile-new');
+  const charNameInput = document.getElementById('charName');
+  if(!select || !addBtn || !charNameInput)return;
+
+  select.addEventListener('change', async function(){
+    const nextId = this.value;
+    if(!nextId || nextId === activeProfileId)return;
+    activeProfileId = nextId;
+    const active = getActiveProfile();
+    activeCharacterId = active?.characterId || 0;
+    effectiveStorageKey = getProfileStorageKey(activeProfileId);
+    saveProfiles();
+    hasPendingRemoteChanges = false;
+    loadData();
+    buildAll();
+    if(!simpleInputsWired){ wireSimpleInputs(); }
+    await hydrateFromRemote();
+  });
+
+  addBtn.addEventListener('click', ()=>{
+    const name = (window.prompt('New character profile name:', nextCharacterName()) || '').trim();
+    if(!name)return;
+    const cidRaw = window.prompt('Remote character_id for this profile (optional):', '');
+    const cid = parseInt((cidRaw || '').trim()) || 0;
+    const id = makeDefaultProfileId();
+    profiles.push({ id, name, characterId: cid });
+    activeProfileId = id;
+    activeCharacterId = cid;
+    effectiveStorageKey = getProfileStorageKey(activeProfileId);
+    CD = getDefaultData();
+    hasPendingRemoteChanges = false;
+    saveProfiles();
+    renderProfileControls();
+    buildAll();
+    saveData();
+  });
+
+  charNameInput.addEventListener('blur', ()=>{
+    const active = getActiveProfile();
+    if(!active)return;
+    const currentName = (CD.charName || '').trim();
+    if(currentName && active.name !== currentName){
+      active.name = currentName;
+      saveProfiles();
+      renderProfileControls();
+    }
+  });
+}
+
+function currentHasRemoteSync(){
+  return Boolean(API_BASE && activeCharacterId > 0);
+}
+
+function getReferenceBase(){
+  if(API_BASE)return API_BASE;
+  return '';
+}
+
+async function fetchReferenceList(kind, q, limit = 30){
+  const base = getReferenceBase();
+  if(!base)return [];
+  const url = `${base}/api/reference/${kind}?q=${encodeURIComponent(q || '')}&limit=${limit}`;
+  const resp = await fetch(url, { method: 'GET' });
+  if(!resp.ok)return [];
+  const data = await resp.json();
+  return Array.isArray(data) ? data : [];
+}
+
+async function fetchReferenceLookup(kind, name){
+  const base = getReferenceBase();
+  if(!base || !name)return null;
+  const url = `${base}/api/reference/${kind}/lookup?name=${encodeURIComponent(name)}`;
+  const resp = await fetch(url, { method: 'GET' });
+  if(!resp.ok)return null;
+  const data = await resp.json();
+  if(!data || typeof data !== 'object' || !data.name)return null;
+  return data;
+}
+
+function setDatalistOptions(id, names){
+  const dl = document.getElementById(id);
+  if(!dl)return;
+  dl.innerHTML = '';
+  names.slice(0, 80).forEach(n=>{
+    const opt = document.createElement('option');
+    opt.value = n;
+    dl.appendChild(opt);
+  });
+}
+
+function wireAutocompleteInput(inp, datalistId, kind){
+  if(!inp || inp.dataset.refWired === '1')return;
+  inp.dataset.refWired = '1';
+  inp.setAttribute('list', datalistId);
+  inp.addEventListener('input', ()=>{
+    const q = (inp.value || '').trim();
+    if(q.length < 2)return;
+    clearTimeout(referenceDebounce);
+    referenceDebounce = setTimeout(async ()=>{
+      const rows = await fetchReferenceList(kind, q, 30);
+      const names = rows.map(r=>r.name).filter(Boolean);
+      setDatalistOptions(datalistId, names);
+    }, 200);
+  });
+}
+
+async function applySpellAutofillToInput(inp, dataKey, index){
+  const name = (inp.value || '').trim();
+  if(!name)return;
+  const row = await fetchReferenceLookup('spells', name);
+  if(!row)return;
+  if(dataKey === 'focusSpells'){
+    CD.focusSpells[index].traits = row.traits || CD.focusSpells[index].traits;
+    CD.focusSpells[index].desc = row.description || CD.focusSpells[index].desc;
+  } else if(dataKey === 'cantrips'){
+    CD.cantrips[index].traits = row.traits || CD.cantrips[index].traits;
+    CD.cantrips[index].desc = row.description || CD.cantrips[index].desc;
+    CD.cantrips[index].actions = row.cast_time || CD.cantrips[index].actions;
+  } else if(dataKey === 'innateSpells'){
+    CD.innateSpells[index].notes = row.description || CD.innateSpells[index].notes;
+    CD.innateSpells[index].dc = row.rank !== undefined ? String(row.rank) : CD.innateSpells[index].dc;
+  }
+  buildAll();
+  saveData();
+}
+
+async function applyEquipmentAutofill(type, index, inputValue){
+  const name = (inputValue || '').trim();
+  if(!name)return;
+  const row = await fetchReferenceLookup('equipment', name);
+  if(!row)return;
+  if(type === 'weapon'){
+    CD.weapons[index].category = row.proficiency_category || row.item_type || CD.weapons[index].category;
+    CD.weapons[index].damage = row.damage || CD.weapons[index].damage;
+    CD.weapons[index].traits = row.traits || CD.weapons[index].traits;
+    CD.weapons[index].bulk = Number(row.bulk || 0);
+  } else if(type === 'inventory'){
+    CD.inventory[index].bulk = Number(row.bulk || 0);
+    CD.inventory[index].value = row.price || CD.inventory[index].value;
+    CD.inventory[index].desc = row.description || CD.inventory[index].desc;
+  } else if(type === 'armor'){
+    CD.armor.type = row.item_type || CD.armor.type;
+    CD.armor.ac = Number(row.ac_bonus || CD.armor.ac || 0);
+    CD.armor.maxdex = row.dex_cap !== null && row.dex_cap !== undefined ? Number(row.dex_cap) : CD.armor.maxdex;
+    CD.armor.check = Number(row.check_penalty || CD.armor.check || 0);
+    CD.armor.speed = Number(row.speed_penalty || CD.armor.speed || 0);
+    CD.armor.str = Number(row.strength_req || CD.armor.str || 0);
+    CD.armor.bulk = Number(row.bulk || CD.armor.bulk || 0);
+    CD.armor.traits = row.traits || CD.armor.traits;
+  }
+  buildAll();
+  saveData();
+}
+
+async function applyFeatAutofill(dataKey, index, inputValue){
+  const name = (inputValue || '').trim();
+  if(!name)return;
+  const row = await fetchReferenceLookup('feats', name);
+  if(!row)return;
+  const target = CD[dataKey]?.[index];
+  if(!target)return;
+  if(target.level === '' || target.level === undefined || target.level === null){
+    target.level = row.level ?? target.level;
+  }
+  target.desc = row.description || target.desc;
+  buildAll();
+  saveData();
+}
+
+function getRemoteDataUrl(){
+  return `${API_BASE}/api/sheet/data?character_id=${activeCharacterId}`;
+}
+
+function getRemoteSaveUrl(){
+  return `${API_BASE}/api/sheet/save`;
+}
+
+function buildRemotePayload(){
+  return {
+    character_id: activeCharacterId,
+    ...CD,
+    abilityScores: getAbilityScoresFromMods(),
+    abilityMods: CD.abilityMods,
+  };
+}
+
+async function fetchRemoteSheet(){
+  if(!currentHasRemoteSync())return null;
+  const resp = await fetch(getRemoteDataUrl(), { method: 'GET' });
+  if(!resp.ok){
+    throw new Error(`Load failed with ${resp.status}`);
+  }
+  return await resp.json();
+}
+
+async function pushRemoteSheet(){
+  if(!currentHasRemoteSync() || !hasPendingRemoteChanges)return;
+  if(!navigator.onLine){
+    setSyncStatus('error', 'Offline - queued');
+    return;
+  }
+  setSyncStatus('pending', 'Syncing...');
+  const resp = await fetch(getRemoteSaveUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildRemotePayload()),
+  });
+  if(!resp.ok){
+    throw new Error(`Save failed with ${resp.status}`);
+  }
+  hasPendingRemoteChanges = false;
+  setSyncStatus('synced', 'Synced');
+}
+
+function scheduleRemoteSync(){
+  if(!currentHasRemoteSync())return;
+  hasPendingRemoteChanges = true;
+  setSyncStatus('pending', 'Pending sync');
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(async ()=>{
+    try{ await pushRemoteSheet(); }
+    catch(_e){ setSyncStatus('error', 'Sync failed - retrying'); }
+  }, 700);
+}
+
+async function hydrateFromRemote(){
+  if(!currentHasRemoteSync()){
+    setSyncStatus('pending', 'Local only');
+    return;
+  }
+  setSyncStatus('pending', 'Loading remote...');
+  try{
+    const remote = await fetchRemoteSheet();
+    if(remote && typeof remote === 'object'){
+      CD = mergeDeep(getDefaultData(), remote);
+      applyAbilityScoresToMods(remote.abilityScores);
+      try{ localStorage.setItem(effectiveStorageKey, JSON.stringify(CD)); }catch(_e){}
+      buildAll();
+      setSyncStatus('synced', 'Synced');
+    }
+  }catch(_e){
+    setSyncStatus('error', 'Remote unavailable');
+  }
+}
 
 function getDefaultData() {
   const d = {
@@ -632,7 +1062,10 @@ function getDefaultData() {
 
 function loadData(){
   try{
-    const s=localStorage.getItem(STORAGE_KEY);
+    if(API_URL_PARAM){
+      try{ localStorage.setItem(STORAGE_API_URL_KEY, API_BASE); }catch(_e){}
+    }
+    const s=localStorage.getItem(effectiveStorageKey);
     if(s){
       const loaded=JSON.parse(s);
       // Backward compatibility: migrate old "abilities" scores to "abilityMods"
@@ -643,6 +1076,13 @@ function loadData(){
           loaded.abilityMods[ab] = (typeof score === 'number') ? Math.floor((score - 10) / 2) : 0;
         });
         delete loaded.abilities;
+      }
+      if(loaded.abilityScores && loaded.abilityMods){
+        ABILITIES.forEach(ab=>{
+          if(loaded.abilityScores[ab] !== undefined){
+            loaded.abilityMods[ab] = scoreToMod(loaded.abilityScores[ab]);
+          }
+        });
       }
       CD=mergeDeep(getDefaultData(),loaded);
     }
@@ -657,12 +1097,12 @@ function mergeDeep(target,src){
   return target;
 }
 
-let saveTimeout;
 function saveData(){
   clearTimeout(saveTimeout);
   saveTimeout=setTimeout(()=>{
-    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(CD));}catch(e){}
+    try{localStorage.setItem(effectiveStorageKey,JSON.stringify(CD));}catch(e){}
     showToast();
+    scheduleRemoteSync();
   },300);
 }
 function showToast(){
@@ -879,6 +1319,12 @@ function buildFeats(containerId,dataKey,fields){
       inp.addEventListener('input',function(){
         CD[this.dataset.feat][parseInt(this.dataset.idx)][this.dataset.f]=this.type==='number'?parseInt(this.value)||'':this.value;saveData();
       });
+      if(inp.dataset.f === 'name'){
+        wireAutocompleteInput(inp, 'ref-feats-list', 'feats');
+        inp.addEventListener('change', ()=>{
+          applyFeatAutofill(inp.dataset.feat, parseInt(inp.dataset.idx), inp.value);
+        });
+      }
     });
   });
 }
@@ -898,6 +1344,12 @@ function buildWeapons(){
       inp.addEventListener('input',function(){
         const idx=parseInt(this.dataset.wpn);CD.weapons[idx][this.dataset.f]=this.type==='number'?parseFloat(this.value)||0:this.value;saveData();recalcBulk();
       });
+      if(inp.dataset.f === 'name'){
+        wireAutocompleteInput(inp, 'ref-equipment-list', 'equipment');
+        inp.addEventListener('change', ()=>{
+          applyEquipmentAutofill('weapon', parseInt(inp.dataset.wpn), inp.value);
+        });
+      }
     });
   });
 }
@@ -918,6 +1370,12 @@ function buildInventory(){
         CD.inventory[idx][f]=(f==='qty'||f==='bulk')?parseFloat(this.value)||0:this.value;
         saveData();recalcBulk();
       });
+      if(inp.dataset.f === 'name'){
+        wireAutocompleteInput(inp, 'ref-equipment-list', 'equipment');
+        inp.addEventListener('change', ()=>{
+          applyEquipmentAutofill('inventory', parseInt(inp.dataset.inv), inp.value);
+        });
+      }
     });
   });
 }
@@ -964,6 +1422,12 @@ function buildFocusSpells(){
     c.appendChild(d);
     d.querySelectorAll('[data-fs]').forEach(inp=>{
       inp.addEventListener('input',function(){CD.focusSpells[parseInt(this.dataset.fs)][this.dataset.f]=this.value;saveData();});
+      if(inp.dataset.f === 'name'){
+        wireAutocompleteInput(inp, 'ref-spells-list', 'spells');
+        inp.addEventListener('change', ()=>{
+          applySpellAutofillToInput(inp, 'focusSpells', parseInt(inp.dataset.fs));
+        });
+      }
     });
   });
 }
@@ -980,6 +1444,12 @@ function buildCantrips(){
     c.appendChild(d);
     d.querySelectorAll('[data-cantrip]').forEach(inp=>{
       inp.addEventListener('input',function(){CD.cantrips[parseInt(this.dataset.cantrip)][this.dataset.f]=this.value;saveData();});
+      if(inp.dataset.f === 'name'){
+        wireAutocompleteInput(inp, 'ref-spells-list', 'spells');
+        inp.addEventListener('change', ()=>{
+          applySpellAutofillToInput(inp, 'cantrips', parseInt(inp.dataset.cantrip));
+        });
+      }
     });
   });
 }
@@ -1034,6 +1504,12 @@ function buildInnateSpells(){
     c.appendChild(d);
     d.querySelectorAll('[data-inn]').forEach(inp=>{
       inp.addEventListener('input',function(){CD.innateSpells[parseInt(this.dataset.inn)][this.dataset.f]=this.value;saveData();});
+      if(inp.dataset.f === 'name'){
+        wireAutocompleteInput(inp, 'ref-spells-list', 'spells');
+        inp.addEventListener('change', ()=>{
+          applySpellAutofillToInput(inp, 'innateSpells', parseInt(inp.dataset.inn));
+        });
+      }
     });
   });
 }
@@ -1152,6 +1628,8 @@ function renderTraitChips(){
 // EVENT WIRING
 // ==============================
 function wireSimpleInputs(){
+  if(simpleInputsWired)return;
+  simpleInputsWired = true;
   const directFields=['charName','playerName','classSubclass','charLevel','xp','ancestry','heritage','background','deity','alignment','size','traits',
     'hp_max','hp_current','hp_temp','wounded','doomed','ac_item','ac_other','ac_armor_type',
     'shield_bonus','shield_hp','shield_hardness','shield_bt',
@@ -1195,6 +1673,12 @@ function wireSimpleInputs(){
         CD.armor[f]=this.type==='number'?parseFloat(this.value)||0:this.value;
         saveData();
       });
+      if(f === 'name'){
+        wireAutocompleteInput(el, 'ref-equipment-list', 'equipment');
+        el.addEventListener('change', ()=>{
+          applyEquipmentAutofill('armor', 0, el.value);
+        });
+      }
     }
   });
 }
@@ -1204,9 +1688,40 @@ function wireSimpleInputs(){
 // ==============================
 if(typeof lucide!=="undefined"&&typeof lucide.createIcons==="function"){lucide.createIcons();}
 
+loadProfiles();
 loadData();
 buildAll();
 wireSimpleInputs();
+renderProfileControls();
+attachProfileControls();
+
+if(currentHasRemoteSync()){
+  setSyncStatus('pending', 'Connecting...');
+}else{
+  setSyncStatus('pending', 'Local only');
+}
+
+hydrateFromRemote();
+
+window.addEventListener('online', ()=>{
+  if(currentHasRemoteSync() && hasPendingRemoteChanges){
+    scheduleRemoteSync();
+  }
+});
+
+window.addEventListener('offline', ()=>{
+  if(currentHasRemoteSync()){
+    setSyncStatus('error', 'Offline - queued');
+  }
+});
+
+if(currentHasRemoteSync()){
+  syncInterval = setInterval(async ()=>{
+    if(!hasPendingRemoteChanges)return;
+    try{ await pushRemoteSheet(); }
+    catch(_e){ setSyncStatus('error', 'Sync failed - retrying'); }
+  }, SYNC_INTERVAL_MS);
+}
 
 // Tab switching
 document.querySelectorAll('.tab-btn-nav').forEach(btn=>{
@@ -1232,7 +1747,7 @@ document.getElementById('reset-cancel').addEventListener('click',()=>{
   document.getElementById('reset-modal').classList.remove('flex');
 });
 document.getElementById('reset-confirm').addEventListener('click',()=>{
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(effectiveStorageKey);
   CD=getDefaultData();
   document.getElementById('reset-modal').classList.add('hidden');
   document.getElementById('reset-modal').classList.remove('flex');
