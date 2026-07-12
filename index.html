@@ -1254,7 +1254,7 @@ function getDefaultData() {
     generalFeats:Array.from({length:10},()=>({level:'',name:'',desc:''})),
     classFeatures:Array.from({length:12},()=>({name:'',level:'',desc:''})),
     armor:{name:'',type:'',ac:0,maxdex:5,check:0,speed:0,str:0,bulk:0,traits:'',resilient:'',rune1:'',rune2:'',rune3:''},
-    weapons:Array.from({length:5},()=>({name:'',category:'',damage:'',traits:'',bulk:0,runes:''})),
+    weapons:Array.from({length:5},()=>({name:'',category:'',damage:'',traits:'',bulk:0,runes:'',prof:'T'})),
     inventory:Array.from({length:20},()=>({name:'',qty:0,bulk:0,value:'',desc:''})),
     currency:{pp:0,gp:0,sp:0,cp:0},
     spell_tradition:'Arcane',spell_type:'Prepared',spell_key_ability:'INT',spell_prof:'U',
@@ -1476,10 +1476,23 @@ function buildStrikes(){
       <div><label class="text-[9px] text-txt-muted uppercase">Traits</label><input class="field-input w-full" value="${s.traits}" data-strike="${i}" data-f="traits" /></div>
     </div>
     <div class="mt-2 flex flex-wrap gap-3 items-center">
+      <div><label class="text-[9px] text-txt-muted uppercase">Weapon Prof</label><div id="wpn-prof-${i}" class="flex gap-1 mt-1"></div></div>
       <span class="text-[10px] text-txt-muted">MAP: <span class="text-crimson-light font-bold">${fmtMod((s.atk||0)-5)} / ${fmtMod((s.atk||0)-10)}</span></span>
       <div class="flex-1"><label class="text-[9px] text-txt-muted uppercase">Notes</label><input class="field-input w-full text-xs" value="${s.notes}" data-strike="${i}" data-f="notes" /></div>
     </div>`;
     c.appendChild(d);
+    // Create weapon proficiency selector
+    ['U','T','E','M','L'].forEach(rank=>{
+      const btn=document.createElement('button');
+      btn.textContent=rank;
+      btn.className='prof-btn'+(((CD.weapons[i]?.prof)||'T')===rank?' active':'');
+      btn.addEventListener('click',()=>{
+        if(!CD.weapons[i])CD.weapons[i]={};
+        CD.weapons[i].prof=rank;
+        saveData();recalcAll();buildStrikes();
+      });
+      document.getElementById('wpn-prof-'+i)?.appendChild(btn);
+    });
     d.querySelectorAll('[data-strike]').forEach(inp=>{
       inp.addEventListener('input',function(){
         const idx=parseInt(this.dataset.strike);const f=this.dataset.f;
@@ -1860,7 +1873,7 @@ function recalcAll(){
     if(!s.name)return;
     const cat=(w.category||'').toLowerCase();
     const ability=cat.includes('finesse')?Math.max(getMod('DEX'),getMod('STR')):cat.includes('ranged')||cat.includes('bow')||cat.includes('crossbow')?getMod('DEX'):getMod('STR');
-    const prof=cat.includes('simple')||cat.includes('martial')?'T':cat.includes('advanced')?'U':'T';
+    const prof=w.prof||'T';
     const rune=parseInt((w.runes||'').match(/\d+/)?.[0])||0;
     s.atk=ability+profBonus(prof)+rune;
   });
