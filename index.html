@@ -1074,6 +1074,7 @@ async function applyEquipmentAutofill(type, index, inputValue){
     CD.weapons[index].damage = row.damage || CD.weapons[index].damage;
     CD.weapons[index].traits = row.traits || CD.weapons[index].traits;
     CD.weapons[index].bulk = Number(row.bulk || 0);
+    syncStrikesFromWeapons();
   } else if(type === 'inventory'){
     CD.inventory[index].bulk = Number(row.bulk || 0);
     CD.inventory[index].value = row.price || CD.inventory[index].value;
@@ -1286,6 +1287,7 @@ function profBonus(rank){const lvl=parseInt(CD.charLevel)||1;if(rank==='U')retur
 // BUILD UI
 // ==============================
 function buildAll(){
+  syncStrikesFromWeapons();
   buildAbilities();buildDyingDots();buildSaves();buildPerceptionProf();buildACProf();
   buildSkills();buildStrikes();buildReactions();buildHeroDots();
   buildFeats('ancestry-feats','ancestryFeats',['level','name','desc']);
@@ -1509,7 +1511,14 @@ function buildWeapons(){
     c.appendChild(d);
     d.querySelectorAll('[data-wpn]').forEach(inp=>{
       inp.addEventListener('input',function(){
-        const idx=parseInt(this.dataset.wpn);CD.weapons[idx][this.dataset.f]=this.type==='number'?parseFloat(this.value)||0:this.value;saveData();recalcBulk();
+        const idx=parseInt(this.dataset.wpn);
+        CD.weapons[idx][this.dataset.f]=this.type==='number'?parseFloat(this.value)||0:this.value;
+        if(['name','category','damage','traits'].includes(this.dataset.f)){
+          syncStrikesFromWeapons();
+          buildStrikes();
+        }
+        saveData();
+        recalcBulk();
       });
       if(inp.dataset.f === 'name'){
         wireAutocompleteInput(inp, 'ref-equipment-list', 'equipment');
@@ -1743,7 +1752,13 @@ function recalcAll(){
   const percEl=document.getElementById('perception_total');if(percEl)percEl.textContent=fmtMod(percTotal);
   // AC
   const dexMod=getMod('DEX');
-  const acTotal=10+dexMod+profBonus(CD.ac_prof)+(parseInt(CD.ac_item)||0)+(parseInt(CD.ac_other)||0);
+  CD.ac_armor_type = inferArmorTypeForAC();
+  const armorDexCapRaw=parseFloat(CD.armor?.maxdex);
+  const armorDexCap=Number.isFinite(armorDexCapRaw)?armorDexCapRaw:99;
+  const dexForAc=Math.min(dexMod, armorDexCap);
+  const armorBonus=parseInt(CD.armor?.ac)||0;
+  const shieldBonus=parseInt(CD.shield_bonus)||0;
+  const acTotal=10+dexForAc+profBonus(CD.ac_prof)+armorBonus+(parseInt(CD.ac_item)||0)+(parseInt(CD.ac_other)||0)+shieldBonus;
   const acEl=document.getElementById('ac_total');if(acEl)acEl.textContent=acTotal;
   // Skills
   SKILLS_DATA.forEach(s=>{
@@ -1791,6 +1806,51 @@ function renderTraitChips(){
   });
 }
 
+function parseWeaponDamageParts(damageText){
+  const text=(damageText||'').toString();
+  const diceMatch=text.match(/(\d+d\d+)/i);
+  let dmgBonus=0;
+  const bonusMatches=[...text.matchAll(/([+-]\s*\d+)/g)];
+  if(bonusMatches.length){
+    const raw=bonusMatches[bonusMatches.length-1][1].replace(/\s+/g,'');
+    const parsed=parseInt(raw,10);
+    if(!Number.isNaN(parsed))dmgBonus=parsed;
+  }
+  const typeMatch=text.match(/\b(slashing|piercing|bludgeoning|fire|cold|acid|electricity|poison|mental|force|sonic|positive|negative|void|vitality|spirit|bleed)\b/i);
+  return {
+    dmgDice:diceMatch?diceMatch[1].toLowerCase():'',
+    dmgBonus,
+    dmgType:typeMatch?typeMatch[1].toLowerCase():'',
+  };
+}
+
+function inferArmorTypeForAC(){
+  const text=(CD.armor?.type||'').toString().toLowerCase();
+  if(text.includes('heavy'))return 'heavy';
+  if(text.includes('medium'))return 'medium';
+  if(text.includes('light'))return 'light';
+  if(text.includes('unarmored')||text.includes('clothing'))return 'unarmored';
+  return CD.ac_armor_type||'unarmored';
+}
+
+function syncStrikesFromWeapons(){
+  const count=Math.min(3, CD.weapons?.length||0, CD.strikes?.length||0);
+  for(let i=0;i<count;i++){
+    const weapon=CD.weapons[i]||{};
+    const strike=CD.strikes[i]||{};
+    if(!weapon.name)continue;
+    strike.name=weapon.name;
+    strike.traits=weapon.traits||'';
+    const parsed=parseWeaponDamageParts(weapon.damage);
+    if(parsed.dmgDice)strike.dmgDice=parsed.dmgDice;
+    if((weapon.damage||'').trim()){
+      strike.dmgBonus=parsed.dmgBonus;
+      if(parsed.dmgType)strike.dmgType=parsed.dmgType;
+    }
+    CD.strikes[i]=strike;
+  }
+}
+
 // ==============================
 // EVENT WIRING
 // ==============================
@@ -1833,12 +1893,12 @@ function wireSimpleInputs(){
       el.addEventListener('input',function(){
         if(!CD.armor)CD.armor={};
         CD.armor[f]=this.type==='number'?parseFloat(this.value)||0:this.value;
-        saveData();recalcBulk();
+        saveData();recalcAll();
       });
       el.addEventListener('change',function(){
         if(!CD.armor)CD.armor={};
         CD.armor[f]=this.type==='number'?parseFloat(this.value)||0:this.value;
-        saveData();
+        saveData();recalcAll();
       });
       if(f === 'name'){
         wireAutocompleteInput(el, 'ref-equipment-list', 'equipment');
