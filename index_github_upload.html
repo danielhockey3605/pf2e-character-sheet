@@ -955,25 +955,121 @@ function getReferenceBase(){
   return '';
 }
 
+const STATIC_REFERENCE_DATA = {
+  spells: [
+    {name:'Electric Arc', rank:0, spell_type:'Cantrip', traditions:'Arcane, Primal', traits:'Cantrip, Electricity, Evocation', cast_time:'2 actions', range:'30 feet', duration:'Instant', damage:'1d4 electricity (basic Reflex)', description:'Lightning arcs to one or two targets.'},
+    {name:'Needle Darts', rank:0, spell_type:'Cantrip', traditions:'Arcane, Occult, Primal', traits:'Cantrip, Attack, Metal', cast_time:'2 actions', range:'60 feet', duration:'Instant', damage:'2d4 piercing', description:'Fires a cluster of magically formed needles.'},
+    {name:'Shield', rank:0, spell_type:'Cantrip', traditions:'Arcane, Divine, Occult', traits:'Cantrip, Abjuration, Force', cast_time:'1 action', range:'Self', duration:'Until start of your next turn', damage:'', description:'Creates a magical shield that can block.'},
+    {name:'Detect Magic', rank:0, spell_type:'Cantrip', traditions:'Arcane, Divine, Occult, Primal', traits:'Cantrip, Detection, Divination', cast_time:'2 actions', range:'30 feet', duration:'Sustained', damage:'', description:'Senses magical auras in the area.'},
+    {name:'Guidance', rank:0, spell_type:'Cantrip', traditions:'Divine, Occult, Primal', traits:'Cantrip, Fortune', cast_time:'1 action', range:'30 feet', duration:'1 round', damage:'', description:'Grant a +1 status bonus to one check.'},
+    {name:'Mage Armor', rank:1, spell_type:'Spell', traditions:'Arcane, Occult', traits:'Abjuration', cast_time:'2 actions', range:'Touch', duration:'Until next daily preparations', damage:'', description:'Target gains +1 item bonus to AC with Dex cap +5.'},
+    {name:'Magic Missile', rank:1, spell_type:'Spell', traditions:'Arcane, Occult', traits:'Evocation, Force', cast_time:'1 to 3 actions', range:'120 feet', duration:'Instant', damage:'1d4+1 force per missile', description:'Automatically hits one or more targets.'},
+    {name:'Heal', rank:1, spell_type:'Spell', traditions:'Divine, Primal', traits:'Healing, Necromancy, Vitality', cast_time:'1 to 3 actions', range:'Varies', duration:'Instant', damage:'1d8 healing (or vitality damage to undead)', description:'Restores HP with variable action effects.'},
+    {name:'Harm', rank:1, spell_type:'Spell', traditions:'Divine', traits:'Necromancy, Void', cast_time:'1 to 3 actions', range:'Varies', duration:'Instant', damage:'1d8 void', description:'Damages living creatures with void energy.'},
+    {name:'Fear', rank:1, spell_type:'Spell', traditions:'Arcane, Divine, Occult, Primal', traits:'Emotion, Fear, Mental', cast_time:'2 actions', range:'30 feet', duration:'Varies', damage:'', description:'Frightens a creature on failed Will save.'},
+    {name:'Bless', rank:1, spell_type:'Spell', traditions:'Divine, Occult', traits:'Aura, Enchantment', cast_time:'2 actions', range:'Self aura', duration:'Sustained up to 1 minute', damage:'', description:'Allies gain +1 status to attack rolls.'},
+    {name:'Bane', rank:1, spell_type:'Spell', traditions:'Divine, Occult', traits:'Aura, Enchantment', cast_time:'2 actions', range:'Self aura', duration:'Sustained up to 1 minute', damage:'', description:'Enemies take -1 status to attack rolls.'}
+  ],
+  equipment: [
+    {name:'Dagger', item_type:'weapon', category:'Simple Melee', level:0, price:'2 sp', bulk:0.1, damage:'1d4 piercing', traits:'Agile, Finesse, Thrown 10 ft, Versatile S', proficiency_category:'Simple', range:'10 ft', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A light versatile blade.'},
+    {name:'Longsword', item_type:'weapon', category:'Martial Melee', level:0, price:'1 gp', bulk:1, damage:'1d8 slashing', traits:'Versatile P', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A standard martial sword.'},
+    {name:'Greatsword', item_type:'weapon', category:'Martial Melee', level:0, price:'2 gp', bulk:2, damage:'1d12 slashing', traits:'Versatile P', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A heavy two-handed sword.'},
+    {name:'Shortbow', item_type:'weapon', category:'Martial Ranged', level:0, price:'3 gp', bulk:1, damage:'1d6 piercing', traits:'Deadly d10, Range 60 ft, Reload 0', proficiency_category:'Martial', range:'60 ft', reload:'0', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A common ranged weapon.'},
+    {name:'Longbow', item_type:'weapon', category:'Martial Ranged', level:0, price:'6 gp', bulk:2, damage:'1d8 piercing', traits:'Deadly d10, Volley 30 ft, Range 100 ft, Reload 0', proficiency_category:'Martial', range:'100 ft', reload:'0', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A powerful ranged weapon.'},
+    {name:'Crossbow', item_type:'weapon', category:'Simple Ranged', level:0, price:'3 gp', bulk:1, damage:'1d8 piercing', traits:'Range 120 ft', proficiency_category:'Simple', range:'120 ft', reload:'1', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A simple ranged weapon with reload.'},
+    {name:'Padded Armor', item_type:'armor', category:'Light Armor', level:0, price:'2 sp', bulk:0.1, damage:'', traits:'Comfort', proficiency_category:'Light', range:'', reload:'', ac_bonus:1, dex_cap:8, check_penalty:0, speed_penalty:0, strength_req:0, description:'Basic padded armor.'},
+    {name:'Leather Armor', item_type:'armor', category:'Light Armor', level:0, price:'2 gp', bulk:1, damage:'', traits:'', proficiency_category:'Light', range:'', reload:'', ac_bonus:1, dex_cap:4, check_penalty:0, speed_penalty:0, strength_req:10, description:'Common light armor.'},
+    {name:'Studded Leather Armor', item_type:'armor', category:'Light Armor', level:0, price:'3 gp', bulk:1, damage:'', traits:'', proficiency_category:'Light', range:'', reload:'', ac_bonus:2, dex_cap:3, check_penalty:-1, speed_penalty:0, strength_req:12, description:'Reinforced light armor.'},
+    {name:'Chain Shirt', item_type:'armor', category:'Medium Armor', level:0, price:'5 gp', bulk:2, damage:'', traits:'Flexible', proficiency_category:'Medium', range:'', reload:'', ac_bonus:2, dex_cap:2, check_penalty:-1, speed_penalty:-5, strength_req:14, description:'A flexible medium armor.'},
+    {name:'Scale Mail', item_type:'armor', category:'Medium Armor', level:0, price:'4 gp', bulk:2, damage:'', traits:'Noisy', proficiency_category:'Medium', range:'', reload:'', ac_bonus:3, dex_cap:2, check_penalty:-2, speed_penalty:-5, strength_req:14, description:'Protective medium armor.'},
+    {name:'Breastplate', item_type:'armor', category:'Medium Armor', level:0, price:'8 gp', bulk:2, damage:'', traits:'', proficiency_category:'Medium', range:'', reload:'', ac_bonus:4, dex_cap:1, check_penalty:-2, speed_penalty:-5, strength_req:16, description:'Strong protection with reduced agility.'},
+    {name:'Half Plate', item_type:'armor', category:'Heavy Armor', level:1, price:'18 gp', bulk:3, damage:'', traits:'Bulwark', proficiency_category:'Heavy', range:'', reload:'', ac_bonus:5, dex_cap:1, check_penalty:-3, speed_penalty:-10, strength_req:16, description:'Heavy armor with excellent defense.'},
+    {name:'Full Plate', item_type:'armor', category:'Heavy Armor', level:2, price:'30 gp', bulk:4, damage:'', traits:'Bulwark', proficiency_category:'Heavy', range:'', reload:'', ac_bonus:6, dex_cap:0, check_penalty:-3, speed_penalty:-10, strength_req:18, description:'Maximum base armor protection.'},
+    {name:'Wooden Shield', item_type:'shield', category:'Shield', level:0, price:'1 gp', bulk:1, damage:'', traits:'', proficiency_category:'Shield', range:'', reload:'', ac_bonus:2, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A basic shield for Raise a Shield.'},
+    {name:'Steel Shield', item_type:'shield', category:'Shield', level:0, price:'2 gp', bulk:1, damage:'', traits:'', proficiency_category:'Shield', range:'', reload:'', ac_bonus:2, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A stronger standard shield.'},
+    {name:'Healer\'s Tools', item_type:'gear', category:'Adventuring Gear', level:0, price:'5 gp', bulk:1, damage:'', traits:'Healer', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Tools for Treat Wounds and medicine checks.'},
+    {name:'Rope (50 ft)', item_type:'gear', category:'Adventuring Gear', level:0, price:'4 sp', bulk:1, damage:'', traits:'', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Durable rope for climbing and utility.'},
+    {name:'Minor Healing Potion', item_type:'consumable', category:'Potion', level:1, price:'4 gp', bulk:0.1, damage:'', traits:'Consumable, Healing, Magical, Potion', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Restore 1d8 HP when consumed.'}
+  ],
+  feats: [
+    {name:'Toughness', feat_type:'General', level:1, traits:'General', prerequisites:'', action_type:'Passive', actions:'', description:'Increase maximum HP and improve recovery from dying.'},
+    {name:'Fleet', feat_type:'General', level:1, traits:'General', prerequisites:'', action_type:'Passive', actions:'', description:'Increase your Speed by 5 feet.'},
+    {name:'Shield Block', feat_type:'General', level:1, traits:'General', prerequisites:'Trained with shields', action_type:'Reaction', actions:'Reaction', description:'Use your shield to reduce incoming damage.'},
+    {name:'Battle Medicine', feat_type:'Skill', level:1, traits:'General, Healing, Manipulate, Skill', prerequisites:'Trained in Medicine', action_type:'Action', actions:'1', description:'Treat Wounds on a creature in combat once per day.'},
+    {name:'Assurance', feat_type:'Skill', level:1, traits:'General, Skill', prerequisites:'Trained in the skill', action_type:'Passive', actions:'', description:'Use fixed check value instead of rolling.'},
+    {name:'Diehard', feat_type:'General', level:1, traits:'General', prerequisites:'', action_type:'Passive', actions:'', description:'You die at dying 5 instead of dying 4.'},
+    {name:'Power Attack', feat_type:'Class', level:1, traits:'Fighter, Flourish', prerequisites:'Fighter', action_type:'Activity', actions:'2', description:'Make one strike that deals extra weapon damage dice on hit.'}
+  ]
+};
+
+function normalizeStaticRow(kind, row){
+  if(kind === 'spells'){
+    return {
+      name: row.name || '', rank: row.rank ?? '', spell_type: row.spell_type || '', traditions: row.traditions || '',
+      traits: row.traits || '', cast_time: row.cast_time || '', range: row.range || '', duration: row.duration || '',
+      damage: row.damage || '', description: row.description || ''
+    };
+  }
+  if(kind === 'equipment'){
+    return {
+      name: row.name || '', item_type: row.item_type || '', category: row.category || '', level: row.level ?? '', price: row.price || '', bulk: row.bulk ?? '',
+      damage: row.damage || '', traits: row.traits || '', proficiency_category: row.proficiency_category || '', range: row.range || '', reload: row.reload || '',
+      ac_bonus: row.ac_bonus ?? '', dex_cap: row.dex_cap ?? '', check_penalty: row.check_penalty ?? '', speed_penalty: row.speed_penalty ?? '', strength_req: row.strength_req ?? '',
+      description: row.description || ''
+    };
+  }
+  return {
+    name: row.name || '', feat_type: row.feat_type || '', level: row.level ?? '', traits: row.traits || '', prerequisites: row.prerequisites || '',
+    action_type: row.action_type || '', actions: row.actions || '', description: row.description || ''
+  };
+}
+
+function staticReferenceSearch(kind, query, limit){
+  const list = STATIC_REFERENCE_DATA[kind] || [];
+  const q = (query || '').toLowerCase().trim();
+  const rows = list.filter(row=>{
+    if(!q)return true;
+    const hay = Object.values(row).map(v=>(v ?? '').toString().toLowerCase()).join(' ');
+    return hay.includes(q);
+  }).slice(0, limit || 30);
+  return rows.map(r=>normalizeStaticRow(kind, r));
+}
+
+function staticReferenceLookup(kind, name){
+  const list = STATIC_REFERENCE_DATA[kind] || [];
+  const target = (name || '').toLowerCase().trim();
+  const row = list.find(r=>(r.name || '').toLowerCase() === target);
+  return row ? normalizeStaticRow(kind, row) : null;
+}
+
 async function fetchReferenceList(kind, q, limit = 30){
   const base = getReferenceBase();
-  if(!base)return [];
+  if(!base)return staticReferenceSearch(kind, q, limit);
   const url = `${base}/api/reference/${kind}?q=${encodeURIComponent(q || '')}&limit=${limit}`;
-  const resp = await fetch(url, { method: 'GET' });
-  if(!resp.ok)return [];
-  const data = await resp.json();
-  return Array.isArray(data) ? data : [];
+  try{
+    const resp = await fetch(url, { method: 'GET' });
+    if(!resp.ok)return staticReferenceSearch(kind, q, limit);
+    const data = await resp.json();
+    return Array.isArray(data) ? data : staticReferenceSearch(kind, q, limit);
+  }catch(_e){
+    return staticReferenceSearch(kind, q, limit);
+  }
 }
 
 async function fetchReferenceLookup(kind, name){
   const base = getReferenceBase();
-  if(!base || !name)return null;
+  if(!name)return null;
+  if(!base)return staticReferenceLookup(kind, name);
   const url = `${base}/api/reference/${kind}/lookup?name=${encodeURIComponent(name)}`;
-  const resp = await fetch(url, { method: 'GET' });
-  if(!resp.ok)return null;
-  const data = await resp.json();
-  if(!data || typeof data !== 'object' || !data.name)return null;
-  return data;
+  try{
+    const resp = await fetch(url, { method: 'GET' });
+    if(!resp.ok)return staticReferenceLookup(kind, name);
+    const data = await resp.json();
+    if(!data || typeof data !== 'object' || !data.name)return staticReferenceLookup(kind, name);
+    return data;
+  }catch(_e){
+    return staticReferenceLookup(kind, name);
+  }
 }
 
 function setDatalistOptions(id, names){
