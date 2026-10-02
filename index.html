@@ -589,6 +589,17 @@ tailwind.config = {
           <option value="feats">Feats</option>
         </select>
       </div>
+      <div class="sm:col-span-2">
+        <label class="text-[10px] text-txt-muted uppercase">Equipment Filter</label>
+        <select id="lib-equip-filter" class="field-input w-full">
+          <option value="all">All Equipment</option>
+          <option value="weapon">Weapons</option>
+          <option value="armor">Armor</option>
+          <option value="shield">Shields</option>
+          <option value="consumable">Consumables</option>
+          <option value="gear">Adventuring Gear</option>
+        </select>
+      </div>
       <div class="sm:col-span-3">
         <label class="text-[10px] text-txt-muted uppercase">Search</label>
         <input id="lib-query" class="field-input w-full" placeholder="Type a name like Electric Arc, Longsword, Shield Block..." />
@@ -608,6 +619,32 @@ tailwind.config = {
     <div class="section-card lg:col-span-2">
       <div class="section-title">⚔ Details</div>
       <div id="lib-detail" class="text-sm text-txt-muted whitespace-pre-wrap min-h-[260px]">Select a result to view details.</div>
+      <div class="mt-3">
+        <div class="text-[10px] text-txt-muted uppercase mb-1">Character Fit Analysis</div>
+        <div id="lib-analysis" class="text-xs text-txt-muted whitespace-pre-wrap min-h-[90px] bg-bg rounded border border-border p-2">Select equipment to see strength, speed, and proficiency notes.</div>
+      </div>
+      <div class="mt-4 border-t border-border pt-3">
+        <div class="flex flex-wrap gap-2 items-center">
+          <button id="lib-set-a" type="button" class="profile-btn">Set Compare A</button>
+          <button id="lib-set-b" type="button" class="profile-btn">Set Compare B</button>
+          <button id="lib-clear-compare" type="button" class="profile-btn">Clear Compare</button>
+          <span id="lib-compare-status" class="text-xs text-txt-muted">Pick a result, then set A/B.</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+          <div>
+            <div class="text-[10px] text-txt-muted uppercase mb-1">Compare A</div>
+            <div id="lib-compare-a" class="text-xs text-txt-muted whitespace-pre-wrap min-h-[120px] bg-bg rounded border border-border p-2">(empty)</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-txt-muted uppercase mb-1">Compare B</div>
+            <div id="lib-compare-b" class="text-xs text-txt-muted whitespace-pre-wrap min-h-[120px] bg-bg rounded border border-border p-2">(empty)</div>
+          </div>
+        </div>
+        <div class="mt-3">
+          <button id="lib-run-compare" type="button" class="profile-btn">Compare A vs B</button>
+          <div id="lib-compare-output" class="text-sm text-txt-muted whitespace-pre-wrap mt-2 min-h-[80px]">Comparison output appears here.</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -736,6 +773,9 @@ let activeProfileId = '';
 let activeCharacterId = CHARACTER_ID;
 let effectiveStorageKey = STORAGE_KEY;
 let referenceDebounce = null;
+let libSelected = null;
+let libCompareA = null;
+let libCompareB = null;
 
 function normalizeApiBase(raw){
   if(!raw)return '';
@@ -915,25 +955,218 @@ function getReferenceBase(){
   return '';
 }
 
+const LOCAL_REFERENCE_FILE_MAP = {
+  spells: 'data/spells.json',
+  equipment: 'data/equipment.json',
+  feats: 'data/feats.json',
+  bestiary: 'data/bestiary.json',
+};
+const LOCAL_REFERENCE_CACHE = {};
+
+async function loadLocalReferenceData(kind){
+  if(LOCAL_REFERENCE_CACHE[kind])return LOCAL_REFERENCE_CACHE[kind];
+  const file = LOCAL_REFERENCE_FILE_MAP[kind];
+  if(!file)return null;
+  try{
+    const resp = await fetch(file, { cache: 'no-store' });
+    if(!resp.ok)return null;
+    const data = await resp.json();
+    if(!Array.isArray(data))return null;
+    LOCAL_REFERENCE_CACHE[kind] = data;
+    return data;
+  }catch(_e){
+    return null;
+  }
+}
+
+const STATIC_REFERENCE_DATA = {
+  spells: [
+    {name:'Electric Arc', rank:0, spell_type:'Cantrip', traditions:'Arcane, Primal', traits:'Cantrip, Electricity, Evocation', cast_time:'2 actions', range:'30 feet', duration:'Instant', damage:'1d4 electricity (basic Reflex)', description:'Lightning arcs to one or two targets.'},
+    {name:'Needle Darts', rank:0, spell_type:'Cantrip', traditions:'Arcane, Occult, Primal', traits:'Cantrip, Attack, Metal', cast_time:'2 actions', range:'60 feet', duration:'Instant', damage:'2d4 piercing', description:'Fires a cluster of magically formed needles.'},
+    {name:'Shield', rank:0, spell_type:'Cantrip', traditions:'Arcane, Divine, Occult', traits:'Cantrip, Abjuration, Force', cast_time:'1 action', range:'Self', duration:'Until start of your next turn', damage:'', description:'Creates a magical shield that can block.'},
+    {name:'Detect Magic', rank:0, spell_type:'Cantrip', traditions:'Arcane, Divine, Occult, Primal', traits:'Cantrip, Detection, Divination', cast_time:'2 actions', range:'30 feet', duration:'Sustained', damage:'', description:'Senses magical auras in the area.'},
+    {name:'Guidance', rank:0, spell_type:'Cantrip', traditions:'Divine, Occult, Primal', traits:'Cantrip, Fortune', cast_time:'1 action', range:'30 feet', duration:'1 round', damage:'', description:'Grant a +1 status bonus to one check.'},
+    {name:'Mage Armor', rank:1, spell_type:'Spell', traditions:'Arcane, Occult', traits:'Abjuration', cast_time:'2 actions', range:'Touch', duration:'Until next daily preparations', damage:'', description:'Target gains +1 item bonus to AC with Dex cap +5.'},
+    {name:'Magic Missile', rank:1, spell_type:'Spell', traditions:'Arcane, Occult', traits:'Evocation, Force', cast_time:'1 to 3 actions', range:'120 feet', duration:'Instant', damage:'1d4+1 force per missile', description:'Automatically hits one or more targets.'},
+    {name:'Heal', rank:1, spell_type:'Spell', traditions:'Divine, Primal', traits:'Healing, Necromancy, Vitality', cast_time:'1 to 3 actions', range:'Varies', duration:'Instant', damage:'1d8 healing (or vitality damage to undead)', description:'Restores HP with variable action effects.'},
+    {name:'Harm', rank:1, spell_type:'Spell', traditions:'Divine', traits:'Necromancy, Void', cast_time:'1 to 3 actions', range:'Varies', duration:'Instant', damage:'1d8 void', description:'Damages living creatures with void energy.'},
+    {name:'Fear', rank:1, spell_type:'Spell', traditions:'Arcane, Divine, Occult, Primal', traits:'Emotion, Fear, Mental', cast_time:'2 actions', range:'30 feet', duration:'Varies', damage:'', description:'Frightens a creature on failed Will save.'},
+    {name:'Bless', rank:1, spell_type:'Spell', traditions:'Divine, Occult', traits:'Aura, Enchantment', cast_time:'2 actions', range:'Self aura', duration:'Sustained up to 1 minute', damage:'', description:'Allies gain +1 status to attack rolls.'},
+    {name:'Bane', rank:1, spell_type:'Spell', traditions:'Divine, Occult', traits:'Aura, Enchantment', cast_time:'2 actions', range:'Self aura', duration:'Sustained up to 1 minute', damage:'', description:'Enemies take -1 status to attack rolls.'}
+  ],
+  equipment: [
+    {name:'Dagger', item_type:'weapon', category:'Simple Melee', level:0, price:'2 sp', bulk:0.1, damage:'1d4 piercing', traits:'Agile, Finesse, Thrown 10 ft, Versatile S', proficiency_category:'Simple', range:'10 ft', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A light versatile blade.'},
+    {name:'Club', item_type:'weapon', category:'Simple Melee', level:0, price:'0 gp', bulk:1, damage:'1d6 bludgeoning', traits:'Thrown 10 ft', proficiency_category:'Simple', range:'10 ft', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A basic wooden club.'},
+    {name:'Spear', item_type:'weapon', category:'Simple Melee', level:0, price:'1 sp', bulk:1, damage:'1d6 piercing', traits:'Thrown 20 ft', proficiency_category:'Simple', range:'20 ft', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A versatile and cheap weapon.'},
+    {name:'Staff', item_type:'weapon', category:'Simple Melee', level:0, price:'0 gp', bulk:1, damage:'1d4 bludgeoning', traits:'Two-Hand d8', proficiency_category:'Simple', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A simple quarterstaff.'},
+    {name:'Longsword', item_type:'weapon', category:'Martial Melee', level:0, price:'1 gp', bulk:1, damage:'1d8 slashing', traits:'Versatile P', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A standard martial sword.'},
+    {name:'Shortsword', item_type:'weapon', category:'Martial Melee', level:0, price:'9 sp', bulk:1, damage:'1d6 piercing', traits:'Agile, Finesse, Versatile S', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A light martial blade.'},
+    {name:'Bastard Sword', item_type:'weapon', category:'Martial Melee', level:0, price:'4 gp', bulk:1, damage:'1d8 slashing', traits:'Two-Hand d12', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Versatile one- or two-handed sword.'},
+    {name:'Scimitar', item_type:'weapon', category:'Martial Melee', level:0, price:'1 gp', bulk:1, damage:'1d6 slashing', traits:'Forceful, Sweep', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Curved blade favored for sweeping attacks.'},
+    {name:'Rapier', item_type:'weapon', category:'Martial Melee', level:0, price:'2 gp', bulk:1, damage:'1d6 piercing', traits:'Deadly d8, Disarm, Finesse', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Precise thrusting sword.'},
+    {name:'Falchion', item_type:'weapon', category:'Martial Melee', level:0, price:'3 gp', bulk:2, damage:'1d10 slashing', traits:'Forceful, Sweep', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Heavy curved two-handed blade.'},
+    {name:'Katana', item_type:'weapon', category:'Martial Melee', level:0, price:'2 gp', bulk:1, damage:'1d6 slashing', traits:'Deadly d8, Two-Hand d8, Versatile P', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Elegant sword with flexible grip.'},
+    {name:'Greatsword', item_type:'weapon', category:'Martial Melee', level:0, price:'2 gp', bulk:2, damage:'1d12 slashing', traits:'Versatile P', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A heavy two-handed sword.'},
+    {name:'Handaxe', item_type:'weapon', category:'Martial Melee', level:0, price:'1 gp', bulk:1, damage:'1d6 slashing', traits:'Agile, Sweep, Thrown 10 ft', proficiency_category:'Martial', range:'10 ft', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A balanced one-handed axe.'},
+    {name:'Battle Axe', item_type:'weapon', category:'Martial Melee', level:0, price:'1 gp', bulk:1, damage:'1d8 slashing', traits:'Sweep', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A robust martial axe.'},
+    {name:'Greataxe', item_type:'weapon', category:'Martial Melee', level:0, price:'2 gp', bulk:2, damage:'1d12 slashing', traits:'Sweep', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Massive axe for heavy hits.'},
+    {name:'Warhammer', item_type:'weapon', category:'Martial Melee', level:0, price:'1 gp', bulk:1, damage:'1d8 bludgeoning', traits:'Shove', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A common heavy hammer.'},
+    {name:'Maul', item_type:'weapon', category:'Martial Melee', level:0, price:'3 gp', bulk:2, damage:'1d12 bludgeoning', traits:'Shove', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Two-handed crushing hammer.'},
+    {name:'Glaive', item_type:'weapon', category:'Martial Melee', level:0, price:'2 gp', bulk:2, damage:'1d8 slashing', traits:'Deadly d8, Reach', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Polearm with extended reach.'},
+    {name:'Halberd', item_type:'weapon', category:'Martial Melee', level:0, price:'2 gp', bulk:2, damage:'1d10 slashing', traits:'Reach, Versatile P', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Reach weapon with axe blade.'},
+    {name:'Trident', item_type:'weapon', category:'Martial Melee', level:0, price:'1 gp', bulk:1, damage:'1d8 piercing', traits:'Thrown 20 ft', proficiency_category:'Martial', range:'20 ft', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Three-pronged spear.'},
+    {name:'Pick', item_type:'weapon', category:'Martial Melee', level:0, price:'7 sp', bulk:1, damage:'1d6 piercing', traits:'Fatal d10', proficiency_category:'Martial', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Armor-piercing spike weapon.'},
+    {name:'Composite Longbow', item_type:'weapon', category:'Martial Ranged', level:0, price:'10 gp', bulk:2, damage:'1d8 piercing', traits:'Deadly d10, Propulsive, Volley 30 ft, Range 100 ft', proficiency_category:'Martial', range:'100 ft', reload:'0', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:14, description:'Longbow variant that rewards strength.'},
+    {name:'Shortbow', item_type:'weapon', category:'Martial Ranged', level:0, price:'3 gp', bulk:1, damage:'1d6 piercing', traits:'Deadly d10, Range 60 ft, Reload 0', proficiency_category:'Martial', range:'60 ft', reload:'0', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A common ranged weapon.'},
+    {name:'Longbow', item_type:'weapon', category:'Martial Ranged', level:0, price:'6 gp', bulk:2, damage:'1d8 piercing', traits:'Deadly d10, Volley 30 ft, Range 100 ft, Reload 0', proficiency_category:'Martial', range:'100 ft', reload:'0', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A powerful ranged weapon.'},
+    {name:'Crossbow', item_type:'weapon', category:'Simple Ranged', level:0, price:'3 gp', bulk:1, damage:'1d8 piercing', traits:'Range 120 ft', proficiency_category:'Simple', range:'120 ft', reload:'1', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A simple ranged weapon with reload.'},
+    {name:'Heavy Crossbow', item_type:'weapon', category:'Simple Ranged', level:0, price:'4 gp', bulk:2, damage:'1d10 piercing', traits:'Range 120 ft', proficiency_category:'Simple', range:'120 ft', reload:'2', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'High damage but slower reload.'},
+    {name:'Sling', item_type:'weapon', category:'Simple Ranged', level:0, price:'0 gp', bulk:0, damage:'1d6 bludgeoning', traits:'Propulsive, Range 50 ft', proficiency_category:'Simple', range:'50 ft', reload:'1', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Simple ranged weapon using stones.'},
+    {name:'Padded Armor', item_type:'armor', category:'Light Armor', level:0, price:'2 sp', bulk:0.1, damage:'', traits:'Comfort', proficiency_category:'Light', range:'', reload:'', ac_bonus:1, dex_cap:8, check_penalty:0, speed_penalty:0, strength_req:0, description:'Basic padded armor.'},
+    {name:'Chain Mail', item_type:'armor', category:'Heavy Armor', level:0, price:'6 gp', bulk:3, damage:'', traits:'Flexible', proficiency_category:'Heavy', range:'', reload:'', ac_bonus:4, dex_cap:1, check_penalty:-2, speed_penalty:-10, strength_req:16, description:'Heavy armor of linked rings.'},
+    {name:'Splint Mail', item_type:'armor', category:'Heavy Armor', level:1, price:'13 gp', bulk:3, damage:'', traits:'', proficiency_category:'Heavy', range:'', reload:'', ac_bonus:5, dex_cap:1, check_penalty:-3, speed_penalty:-10, strength_req:16, description:'Heavy armor reinforced with splints.'},
+    {name:'Leather Armor', item_type:'armor', category:'Light Armor', level:0, price:'2 gp', bulk:1, damage:'', traits:'', proficiency_category:'Light', range:'', reload:'', ac_bonus:1, dex_cap:4, check_penalty:0, speed_penalty:0, strength_req:10, description:'Common light armor.'},
+    {name:'Studded Leather Armor', item_type:'armor', category:'Light Armor', level:0, price:'3 gp', bulk:1, damage:'', traits:'', proficiency_category:'Light', range:'', reload:'', ac_bonus:2, dex_cap:3, check_penalty:-1, speed_penalty:0, strength_req:12, description:'Reinforced light armor.'},
+    {name:'Chain Shirt', item_type:'armor', category:'Medium Armor', level:0, price:'5 gp', bulk:2, damage:'', traits:'Flexible', proficiency_category:'Medium', range:'', reload:'', ac_bonus:2, dex_cap:2, check_penalty:-1, speed_penalty:-5, strength_req:14, description:'A flexible medium armor.'},
+    {name:'Scale Mail', item_type:'armor', category:'Medium Armor', level:0, price:'4 gp', bulk:2, damage:'', traits:'Noisy', proficiency_category:'Medium', range:'', reload:'', ac_bonus:3, dex_cap:2, check_penalty:-2, speed_penalty:-5, strength_req:14, description:'Protective medium armor.'},
+    {name:'Breastplate', item_type:'armor', category:'Medium Armor', level:0, price:'8 gp', bulk:2, damage:'', traits:'', proficiency_category:'Medium', range:'', reload:'', ac_bonus:4, dex_cap:1, check_penalty:-2, speed_penalty:-5, strength_req:16, description:'Strong protection with reduced agility.'},
+    {name:'Half Plate', item_type:'armor', category:'Heavy Armor', level:1, price:'18 gp', bulk:3, damage:'', traits:'Bulwark', proficiency_category:'Heavy', range:'', reload:'', ac_bonus:5, dex_cap:1, check_penalty:-3, speed_penalty:-10, strength_req:16, description:'Heavy armor with excellent defense.'},
+    {name:'Full Plate', item_type:'armor', category:'Heavy Armor', level:2, price:'30 gp', bulk:4, damage:'', traits:'Bulwark', proficiency_category:'Heavy', range:'', reload:'', ac_bonus:6, dex_cap:0, check_penalty:-3, speed_penalty:-10, strength_req:18, description:'Maximum base armor protection.'},
+    {name:'Wooden Shield', item_type:'shield', category:'Shield', level:0, price:'1 gp', bulk:1, damage:'', traits:'', proficiency_category:'Shield', range:'', reload:'', ac_bonus:2, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A basic shield for Raise a Shield.'},
+    {name:'Steel Shield', item_type:'shield', category:'Shield', level:0, price:'2 gp', bulk:1, damage:'', traits:'', proficiency_category:'Shield', range:'', reload:'', ac_bonus:2, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A stronger standard shield.'},
+    {name:'Buckler', item_type:'shield', category:'Shield', level:0, price:'1 gp', bulk:0.1, damage:'', traits:'', proficiency_category:'Shield', range:'', reload:'', ac_bonus:1, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Small shield that keeps your hand flexible.'},
+    {name:'Tower Shield', item_type:'shield', category:'Shield', level:1, price:'10 gp', bulk:4, damage:'', traits:'Take Cover', proficiency_category:'Shield', range:'', reload:'', ac_bonus:2, dex_cap:null, check_penalty:0, speed_penalty:-5, strength_req:14, description:'Large shield offering enhanced cover options.'},
+    {name:'Healer\'s Tools', item_type:'gear', category:'Adventuring Gear', level:0, price:'5 gp', bulk:1, damage:'', traits:'Healer', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Tools for Treat Wounds and medicine checks.'},
+    {name:'Rope (50 ft)', item_type:'gear', category:'Adventuring Gear', level:0, price:'4 sp', bulk:1, damage:'', traits:'', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Durable rope for climbing and utility.'},
+    {name:'Torch', item_type:'gear', category:'Adventuring Gear', level:0, price:'1 cp', bulk:0.1, damage:'1 fire', traits:'Light', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Provides light and can be used as an improvised weapon.'},
+    {name:'Backpack', item_type:'gear', category:'Adventuring Gear', level:0, price:'1 sp', bulk:0.1, damage:'', traits:'Container', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'A standard pack for carrying gear.'},
+    {name:'Bedroll', item_type:'gear', category:'Adventuring Gear', level:0, price:'1 cp', bulk:0.1, damage:'', traits:'', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Portable bedding for travel.'},
+    {name:'Waterskin', item_type:'gear', category:'Adventuring Gear', level:0, price:'5 cp', bulk:0.1, damage:'', traits:'Container', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Carries drinking water.'},
+    {name:'Rations (1 week)', item_type:'gear', category:'Adventuring Gear', level:0, price:'4 sp', bulk:1, damage:'', traits:'Consumable', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Travel food for one week.'},
+    {name:'Minor Healing Potion', item_type:'consumable', category:'Potion', level:1, price:'4 gp', bulk:0.1, damage:'', traits:'Consumable, Healing, Magical, Potion', proficiency_category:'', range:'', reload:'', ac_bonus:0, dex_cap:null, check_penalty:0, speed_penalty:0, strength_req:0, description:'Restore 1d8 HP when consumed.'}
+  ],
+  feats: [
+    {name:'Toughness', feat_type:'General', level:1, traits:'General', prerequisites:'', action_type:'Passive', actions:'', description:'Increase maximum HP and improve recovery from dying.'},
+    {name:'Fleet', feat_type:'General', level:1, traits:'General', prerequisites:'', action_type:'Passive', actions:'', description:'Increase your Speed by 5 feet.'},
+    {name:'Shield Block', feat_type:'General', level:1, traits:'General', prerequisites:'Trained with shields', action_type:'Reaction', actions:'Reaction', description:'Use your shield to reduce incoming damage.'},
+    {name:'Battle Medicine', feat_type:'Skill', level:1, traits:'General, Healing, Manipulate, Skill', prerequisites:'Trained in Medicine', action_type:'Action', actions:'1', description:'Treat Wounds on a creature in combat once per day.'},
+    {name:'Assurance', feat_type:'Skill', level:1, traits:'General, Skill', prerequisites:'Trained in the skill', action_type:'Passive', actions:'', description:'Use fixed check value instead of rolling.'},
+    {name:'Diehard', feat_type:'General', level:1, traits:'General', prerequisites:'', action_type:'Passive', actions:'', description:'You die at dying 5 instead of dying 4.'},
+    {name:'Power Attack', feat_type:'Class', level:1, traits:'Fighter, Flourish', prerequisites:'Fighter', action_type:'Activity', actions:'2', description:'Make one strike that deals extra weapon damage dice on hit.'}
+  ]
+};
+
+function normalizeStaticRow(kind, row){
+  if(kind === 'spells'){
+    return {
+      name: row.name || '', rank: row.rank ?? '', spell_type: row.spell_type || '', traditions: row.traditions || '',
+      traits: row.traits || '', cast_time: row.cast_time || '', range: row.range || '', duration: row.duration || '',
+      damage: row.damage || '', description: row.description || ''
+    };
+  }
+  if(kind === 'equipment'){
+    return {
+      name: row.name || '', item_type: row.item_type || '', category: row.category || '', level: row.level ?? '', price: row.price || '', bulk: row.bulk ?? '',
+      damage: row.damage || '', traits: row.traits || '', proficiency_category: row.proficiency_category || '', range: row.range || '', reload: row.reload || '',
+      ac_bonus: row.ac_bonus ?? '', dex_cap: row.dex_cap ?? '', check_penalty: row.check_penalty ?? '', speed_penalty: row.speed_penalty ?? '', strength_req: row.strength_req ?? '',
+      description: row.description || ''
+    };
+  }
+  return {
+    name: row.name || '', feat_type: row.feat_type || '', level: row.level ?? '', traits: row.traits || '', prerequisites: row.prerequisites || '',
+    action_type: row.action_type || '', actions: row.actions || '', description: row.description || ''
+  };
+}
+
+function staticReferenceSearch(kind, query, limit){
+  const list = STATIC_REFERENCE_DATA[kind] || [];
+  const q = (query || '').toLowerCase().trim();
+  const rows = list.filter(row=>{
+    if(!q)return true;
+    const hay = Object.values(row).map(v=>(v ?? '').toString().toLowerCase()).join(' ');
+    return hay.includes(q);
+  }).slice(0, limit || 30);
+  return rows.map(r=>normalizeStaticRow(kind, r));
+}
+
+function staticReferenceLookup(kind, name){
+  const list = STATIC_REFERENCE_DATA[kind] || [];
+  const target = (name || '').toLowerCase().trim();
+  const row = list.find(r=>(r.name || '').toLowerCase() === target);
+  return row ? normalizeStaticRow(kind, row) : null;
+}
+
+function searchReferenceRows(list, query, limit, kind){
+  const q = (query || '').toLowerCase().trim();
+  const rows = (list || []).filter(row=>{
+    if(!q)return true;
+    const hay = Object.values(row).map(v=>(v ?? '').toString().toLowerCase()).join(' ');
+    return hay.includes(q);
+  }).slice(0, limit || 30);
+  return kind ? rows.map(r=>normalizeStaticRow(kind, r)) : rows;
+}
+
+function lookupReferenceRow(list, name, kind){
+  const target = (name || '').toLowerCase().trim();
+  const row = (list || []).find(r=>(r.name || '').toLowerCase() === target);
+  return row ? (kind ? normalizeStaticRow(kind, row) : row) : null;
+}
+
 async function fetchReferenceList(kind, q, limit = 30){
   const base = getReferenceBase();
-  if(!base)return [];
+  if(!base){
+    const local = await loadLocalReferenceData(kind);
+    if(local)return searchReferenceRows(local, q, limit, kind);
+    return staticReferenceSearch(kind, q, limit);
+  }
   const url = `${base}/api/reference/${kind}?q=${encodeURIComponent(q || '')}&limit=${limit}`;
-  const resp = await fetch(url, { method: 'GET' });
-  if(!resp.ok)return [];
-  const data = await resp.json();
-  return Array.isArray(data) ? data : [];
+  try{
+    const resp = await fetch(url, { method: 'GET' });
+    if(!resp.ok){
+      const local = await loadLocalReferenceData(kind);
+      if(local)return searchReferenceRows(local, q, limit, kind);
+      return staticReferenceSearch(kind, q, limit);
+    }
+    const data = await resp.json();
+    if(Array.isArray(data))return data;
+    const local = await loadLocalReferenceData(kind);
+    if(local)return searchReferenceRows(local, q, limit, kind);
+    return staticReferenceSearch(kind, q, limit);
+  }catch(_e){
+    const local = await loadLocalReferenceData(kind);
+    if(local)return searchReferenceRows(local, q, limit, kind);
+    return staticReferenceSearch(kind, q, limit);
+  }
 }
 
 async function fetchReferenceLookup(kind, name){
   const base = getReferenceBase();
-  if(!base || !name)return null;
+  if(!name)return null;
+  if(!base){
+    const local = await loadLocalReferenceData(kind);
+    if(local)return lookupReferenceRow(local, name, kind);
+    return staticReferenceLookup(kind, name);
+  }
   const url = `${base}/api/reference/${kind}/lookup?name=${encodeURIComponent(name)}`;
-  const resp = await fetch(url, { method: 'GET' });
-  if(!resp.ok)return null;
-  const data = await resp.json();
-  if(!data || typeof data !== 'object' || !data.name)return null;
-  return data;
+  try{
+    const resp = await fetch(url, { method: 'GET' });
+    if(!resp.ok){
+      const local = await loadLocalReferenceData(kind);
+      if(local)return lookupReferenceRow(local, name, kind);
+      return staticReferenceLookup(kind, name);
+    }
+    const data = await resp.json();
+    if(!data || typeof data !== 'object' || !data.name){
+      const local = await loadLocalReferenceData(kind);
+      if(local)return lookupReferenceRow(local, name, kind);
+      return staticReferenceLookup(kind, name);
+    }
+    return data;
+  }catch(_e){
+    const local = await loadLocalReferenceData(kind);
+    if(local)return lookupReferenceRow(local, name, kind);
+    return staticReferenceLookup(kind, name);
+  }
 }
 
 function setDatalistOptions(id, names){
@@ -961,6 +1194,75 @@ function summarizeRow(kind, row){
   const lvl = row.level !== undefined && row.level !== null ? `Lvl ${row.level}` : 'Lvl ?';
   const tp = row.feat_type || 'feat';
   return `${row.name} - ${tp} - ${lvl}`;
+}
+
+function equipmentCategoryMatch(row, selectedFilter){
+  if(!row || selectedFilter === 'all')return true;
+  const itemType = (row.item_type || '').toString().toLowerCase();
+  const category = (row.category || '').toString().toLowerCase();
+  const traits = (row.traits || '').toString().toLowerCase();
+  const text = `${itemType} ${category} ${traits}`;
+  if(selectedFilter === 'weapon') return text.includes('weapon') || text.includes('simple') || text.includes('martial') || text.includes('advanced');
+  if(selectedFilter === 'armor') return text.includes('armor') && !text.includes('shield');
+  if(selectedFilter === 'shield') return text.includes('shield');
+  if(selectedFilter === 'consumable') return text.includes('consumable') || text.includes('potion') || text.includes('elixir');
+  if(selectedFilter === 'gear') return text.includes('gear') || text.includes('adventuring');
+  return true;
+}
+
+function parseNum(v, fallback=0){
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function equipmentAnalysis(row){
+  if(!row)return 'No equipment selected.';
+  const lines = [];
+  const itemType = (row.item_type || '').toString().toLowerCase();
+  const category = (row.category || '').toString().toLowerCase();
+  const strScore = modToScore(getMod('STR'));
+  const dexMod = getMod('DEX');
+  const baseSpeed = parseNum(CD.speed_base, 25);
+  const speedPenalty = Math.max(0, parseNum(row.speed_penalty, 0));
+  const checkPenalty = parseNum(row.check_penalty, 0);
+  const strReq = Math.max(0, parseNum(row.strength_req, 0));
+  const acBonus = parseNum(row.ac_bonus, 0);
+  const dexCapRaw = row.dex_cap;
+  const dexCap = Number.isFinite(Number(dexCapRaw)) ? Number(dexCapRaw) : 99;
+  const hasStrReq = strReq > 0;
+  const meetsStr = !hasStrReq || strScore >= strReq;
+
+  lines.push(`STR score: ${strScore}`);
+  if(hasStrReq){
+    lines.push(`Strength requirement: ${strReq} (${meetsStr ? 'met' : 'not met'})`);
+  } else {
+    lines.push('Strength requirement: none');
+  }
+
+  if(speedPenalty > 0){
+    const projectedSpeed = Math.max(0, baseSpeed - speedPenalty);
+    lines.push(`Speed impact: base ${baseSpeed} -> ${projectedSpeed} (listed penalty ${speedPenalty})`);
+  } else {
+    lines.push(`Speed impact: no listed penalty (base ${baseSpeed})`);
+  }
+
+  if(acBonus > 0 || itemType.includes('armor') || category.includes('armor')){
+    const acProf = CD.ac_prof || 'U';
+    const profB = profBonus(acProf);
+    const projectedAc = 10 + Math.min(dexMod, dexCap) + profB + acBonus + parseNum(CD.ac_item,0) + parseNum(CD.ac_other,0) + parseNum(CD.shield_bonus,0);
+    lines.push(`Projected AC with this armor: ${projectedAc}`);
+    if(acProf === 'U') lines.push('Warning: you are currently Untrained for armor proficiency on the sheet.');
+    if(!meetsStr) lines.push('Warning: STR below requirement; check/speed penalties may apply more harshly by table rules.');
+    if(checkPenalty < 0) lines.push(`Armor check penalty listed: ${checkPenalty}`);
+  }
+
+  const profText = (row.proficiency_category || row.category || '').toString().toLowerCase();
+  if(profText.includes('weapon') || profText.includes('simple') || profText.includes('martial') || profText.includes('advanced')){
+    lines.push(`Weapon proficiency category: ${row.proficiency_category || row.category || 'unknown'}`);
+    lines.push('Reminder: sheet tracks weapon training per strike; verify your rank for this weapon category.');
+  }
+
+  return lines.join('\n');
 }
 
 function formatDetail(kind, row){
@@ -1015,18 +1317,80 @@ function formatDetail(kind, row){
   ].join('\n');
 }
 
+function renderCompareBox(targetId, entry){
+  const el = document.getElementById(targetId);
+  if(!el)return;
+  if(!entry || !entry.row){
+    el.textContent = '(empty)';
+    return;
+  }
+  const head = summarizeRow(entry.kind, entry.row);
+  el.textContent = `${head}\n\n${formatDetail(entry.kind, entry.row)}`;
+}
+
+function compareEntries(a, b){
+  if(!a || !b)return 'Set both Compare A and Compare B first.';
+  if(a.kind !== b.kind)return 'Choose entries from the same category before comparing.';
+  const rows = [];
+  const kind = a.kind;
+  const ra = a.row || {};
+  const rb = b.row || {};
+
+  const add = (label, va, vb) => {
+    rows.push(`${label}\nA: ${va ?? ''}\nB: ${vb ?? ''}`);
+  };
+
+  add('Name', ra.name || '', rb.name || '');
+
+  if(kind === 'spells'){
+    add('Rank', ra.rank ?? '', rb.rank ?? '');
+    add('Traditions', ra.traditions || '', rb.traditions || '');
+    add('Cast Time', ra.cast_time || '', rb.cast_time || '');
+    add('Range', ra.range || '', rb.range || '');
+    add('Duration', ra.duration || '', rb.duration || '');
+    add('Damage', ra.damage || '', rb.damage || '');
+    add('Traits', ra.traits || '', rb.traits || '');
+  } else if(kind === 'equipment'){
+    add('Type', ra.item_type || '', rb.item_type || '');
+    add('Category', ra.category || '', rb.category || '');
+    add('Level', ra.level ?? '', rb.level ?? '');
+    add('Price', ra.price || '', rb.price || '');
+    add('Bulk', ra.bulk ?? '', rb.bulk ?? '');
+    add('Damage', ra.damage || '', rb.damage || '');
+    add('AC Bonus', ra.ac_bonus ?? '', rb.ac_bonus ?? '');
+    add('DEX Cap', ra.dex_cap ?? '', rb.dex_cap ?? '');
+    add('Check Penalty', ra.check_penalty ?? '', rb.check_penalty ?? '');
+    add('Speed Penalty', ra.speed_penalty ?? '', rb.speed_penalty ?? '');
+    add('Strength Req', ra.strength_req ?? '', rb.strength_req ?? '');
+    add('Traits', ra.traits || '', rb.traits || '');
+  } else {
+    add('Feat Type', ra.feat_type || '', rb.feat_type || '');
+    add('Level', ra.level ?? '', rb.level ?? '');
+    add('Prerequisites', ra.prerequisites || '', rb.prerequisites || '');
+    add('Action Type', ra.action_type || '', rb.action_type || '');
+    add('Actions', ra.actions || '', rb.actions || '');
+    add('Traits', ra.traits || '', rb.traits || '');
+  }
+
+  return rows.join('\n\n');
+}
+
 async function runLibrarySearch(){
   const kindEl = document.getElementById('lib-kind');
+  const equipFilterEl = document.getElementById('lib-equip-filter');
   const queryEl = document.getElementById('lib-query');
   const statusEl = document.getElementById('lib-status');
   const resultsEl = document.getElementById('lib-results');
   const detailEl = document.getElementById('lib-detail');
+  const analysisEl = document.getElementById('lib-analysis');
   if(!kindEl || !queryEl || !statusEl || !resultsEl || !detailEl)return;
 
   const kind = kindEl.value;
+  const equipFilter = equipFilterEl ? equipFilterEl.value : 'all';
   const q = (queryEl.value || '').trim();
   resultsEl.innerHTML = '';
   detailEl.textContent = 'Select a result to view details.';
+  if(analysisEl)analysisEl.textContent = 'Select equipment to see strength, speed, and proficiency notes.';
 
   if(q.length < 2){
     statusEl.textContent = 'Enter at least 2 characters to search.';
@@ -1034,7 +1398,23 @@ async function runLibrarySearch(){
   }
 
   statusEl.textContent = 'Searching...';
-  const rows = await fetchReferenceList(kind, q, 80);
+  let rows = [];
+  if(kind === 'equipment'){
+    const localSeed = await loadLocalReferenceData('equipment');
+    const usingFallback = !localSeed;
+    const seed = localSeed || staticReferenceSearch('equipment', '', 5000);
+    statusEl.textContent = usingFallback
+      ? `Using fallback sample data (${seed.length} items). Upload data/equipment.json for full catalog results.`
+      : `Searching equipment catalog (${seed.length} items)...`;
+    const qLower = q.toLowerCase();
+    rows = seed.filter(r=>{
+      const hay = [r.name, r.item_type, r.category, r.traits, r.description, r.proficiency_category, r.damage].map(v=>(v||'').toString().toLowerCase()).join(' ');
+      return hay.includes(qLower) && equipmentCategoryMatch(r, equipFilter);
+    }).slice(0, 120);
+  } else {
+    rows = await fetchReferenceList(kind, q, 120);
+  }
+
   if(!rows.length){
     statusEl.textContent = 'No results found.';
     return;
@@ -1053,7 +1433,13 @@ async function runLibrarySearch(){
         const looked = await fetchReferenceLookup(kind, row.name);
         if(looked)detail = looked;
       }
+      libSelected = { kind, row: detail };
       detailEl.textContent = formatDetail(kind, detail);
+      if(analysisEl){
+        analysisEl.textContent = kind === 'equipment' ? equipmentAnalysis(detail) : 'Fit analysis is currently available for equipment.';
+      }
+      const compareStatusEl = document.getElementById('lib-compare-status');
+      if(compareStatusEl)compareStatusEl.textContent = `Selected: ${summarizeRow(kind, detail)}`;
     });
     resultsEl.appendChild(btn);
   });
@@ -1063,6 +1449,13 @@ function wireLibraryTab(){
   const btn = document.getElementById('lib-search-btn');
   const query = document.getElementById('lib-query');
   const kind = document.getElementById('lib-kind');
+  const equipFilter = document.getElementById('lib-equip-filter');
+  const setA = document.getElementById('lib-set-a');
+  const setB = document.getElementById('lib-set-b');
+  const clear = document.getElementById('lib-clear-compare');
+  const runCompare = document.getElementById('lib-run-compare');
+  const status = document.getElementById('lib-compare-status');
+  const output = document.getElementById('lib-compare-output');
   if(btn && !btn.dataset.wired){
     btn.dataset.wired = '1';
     btn.addEventListener('click', ()=>{ runLibrarySearch(); });
@@ -1073,7 +1466,57 @@ function wireLibraryTab(){
   }
   if(kind && !kind.dataset.wired){
     kind.dataset.wired = '1';
-    kind.addEventListener('change', ()=>{ runLibrarySearch(); });
+    kind.addEventListener('change', ()=>{
+      if(equipFilter)equipFilter.disabled = kind.value !== 'equipment';
+      runLibrarySearch();
+    });
+  }
+  if(equipFilter && !equipFilter.dataset.wired){
+    equipFilter.dataset.wired = '1';
+    equipFilter.disabled = !kind || kind.value !== 'equipment';
+    equipFilter.addEventListener('change', ()=>{ runLibrarySearch(); });
+  }
+  if(setA && !setA.dataset.wired){
+    setA.dataset.wired = '1';
+    setA.addEventListener('click', ()=>{
+      if(!libSelected){
+        if(status)status.textContent = 'Select an item first.';
+        return;
+      }
+      libCompareA = { kind: libSelected.kind, row: libSelected.row };
+      renderCompareBox('lib-compare-a', libCompareA);
+      if(status)status.textContent = 'Compare A set.';
+    });
+  }
+  if(setB && !setB.dataset.wired){
+    setB.dataset.wired = '1';
+    setB.addEventListener('click', ()=>{
+      if(!libSelected){
+        if(status)status.textContent = 'Select an item first.';
+        return;
+      }
+      libCompareB = { kind: libSelected.kind, row: libSelected.row };
+      renderCompareBox('lib-compare-b', libCompareB);
+      if(status)status.textContent = 'Compare B set.';
+    });
+  }
+  if(clear && !clear.dataset.wired){
+    clear.dataset.wired = '1';
+    clear.addEventListener('click', ()=>{
+      libSelected = null;
+      libCompareA = null;
+      libCompareB = null;
+      renderCompareBox('lib-compare-a', libCompareA);
+      renderCompareBox('lib-compare-b', libCompareB);
+      if(status)status.textContent = 'Pick a result, then set A/B.';
+      if(output)output.textContent = 'Comparison output appears here.';
+    });
+  }
+  if(runCompare && !runCompare.dataset.wired){
+    runCompare.dataset.wired = '1';
+    runCompare.addEventListener('click', ()=>{
+      if(output)output.textContent = compareEntries(libCompareA, libCompareB);
+    });
   }
 }
 
@@ -1285,22 +1728,36 @@ function loadData(){
     const s=localStorage.getItem(effectiveStorageKey);
     if(s){
       const loaded=JSON.parse(s);
-      // Backward compatibility: migrate old "abilities" scores to "abilityMods"
-      if(loaded.abilities && !loaded.abilityMods){
-        loaded.abilityMods = {};
+      // Backward compatibility: normalize any legacy ability payload shape.
+      if(!loaded.abilityMods || typeof loaded.abilityMods !== 'object') loaded.abilityMods = {};
+      const asInt = (v) => {
+        const n = parseInt(v);
+        return Number.isNaN(n) ? null : n;
+      };
+
+      // Older saves used "abilities" with score values.
+      if(loaded.abilities && typeof loaded.abilities === 'object'){
         ABILITIES.forEach(ab => {
-          const score = loaded.abilities[ab];
-          loaded.abilityMods[ab] = (typeof score === 'number') ? Math.floor((score - 10) / 2) : 0;
+          const score = asInt(loaded.abilities[ab]);
+          if(score !== null) loaded.abilityMods[ab] = scoreToMod(score);
         });
         delete loaded.abilities;
       }
-      if(loaded.abilityScores && loaded.abilityMods){
+
+      // Newer saves may include explicit abilityScores; always prefer them.
+      if(loaded.abilityScores && typeof loaded.abilityScores === 'object'){
         ABILITIES.forEach(ab=>{
-          if(loaded.abilityScores[ab] !== undefined){
-            loaded.abilityMods[ab] = scoreToMod(loaded.abilityScores[ab]);
-          }
+          const score = asInt(loaded.abilityScores[ab]);
+          if(score !== null) loaded.abilityMods[ab] = scoreToMod(score);
         });
       }
+
+      // Final sanitize so all ability mod entries are numeric.
+      ABILITIES.forEach(ab=>{
+        const normalized = asInt(loaded.abilityMods[ab]);
+        loaded.abilityMods[ab] = normalized === null ? 0 : normalized;
+      });
+
       CD=mergeDeep(getDefaultData(),loaded);
     }
   }catch(e){CD=getDefaultData();}
