@@ -600,6 +600,19 @@ tailwind.config = {
           <option value="gear">Adventuring Gear</option>
         </select>
       </div>
+      <div class="sm:col-span-2">
+        <label class="text-[10px] text-txt-muted uppercase">Proficiency / Armor Class</label>
+        <select id="lib-equip-refine" class="field-input w-full">
+          <option value="all">All</option>
+          <option value="simple">Simple Weapons</option>
+          <option value="martial">Martial Weapons</option>
+          <option value="advanced">Advanced Weapons</option>
+          <option value="light">Light Armor</option>
+          <option value="medium">Medium Armor</option>
+          <option value="heavy">Heavy Armor</option>
+          <option value="shield">Shield</option>
+        </select>
+      </div>
       <div class="sm:col-span-3">
         <label class="text-[10px] text-txt-muted uppercase">Search</label>
         <input id="lib-query" class="field-input w-full" placeholder="Type a name like Electric Arc, Longsword, Shield Block..." />
@@ -1259,6 +1272,23 @@ function equipmentCategoryMatch(row, selectedFilter){
   return true;
 }
 
+function equipmentRefineMatch(row, refineFilter){
+  if(!row || refineFilter === 'all')return true;
+  const prof = (row.proficiency_category || '').toString().toLowerCase();
+  const itemType = (row.item_type || '').toString().toLowerCase();
+  const category = (row.category || '').toString().toLowerCase();
+  const text = `${prof} ${itemType} ${category}`;
+
+  if(refineFilter === 'simple')return text.includes('simple');
+  if(refineFilter === 'martial')return text.includes('martial');
+  if(refineFilter === 'advanced')return text.includes('advanced');
+  if(refineFilter === 'light')return text.includes('light armor');
+  if(refineFilter === 'medium')return text.includes('medium armor');
+  if(refineFilter === 'heavy')return text.includes('heavy armor');
+  if(refineFilter === 'shield')return text.includes('shield');
+  return true;
+}
+
 function parseNum(v, fallback=0){
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
@@ -1427,6 +1457,7 @@ function compareEntries(a, b){
 async function runLibrarySearch(){
   const kindEl = document.getElementById('lib-kind');
   const equipFilterEl = document.getElementById('lib-equip-filter');
+  const equipRefineEl = document.getElementById('lib-equip-refine');
   const queryEl = document.getElementById('lib-query');
   const statusEl = document.getElementById('lib-status');
   const resultsEl = document.getElementById('lib-results');
@@ -1436,6 +1467,7 @@ async function runLibrarySearch(){
 
   const kind = kindEl.value;
   const equipFilter = equipFilterEl ? equipFilterEl.value : 'all';
+  const equipRefine = equipRefineEl ? equipRefineEl.value : 'all';
   const q = (queryEl.value || '').trim();
   resultsEl.innerHTML = '';
   detailEl.textContent = 'Select a result to view details.';
@@ -1458,7 +1490,7 @@ async function runLibrarySearch(){
     const qLower = q.toLowerCase();
     rows = seed.filter(r=>{
       const hay = [r.name, r.item_type, r.category, r.traits, r.description, r.proficiency_category, r.damage].map(v=>(v||'').toString().toLowerCase()).join(' ');
-      return hay.includes(qLower) && equipmentCategoryMatch(r, equipFilter);
+      return hay.includes(qLower) && equipmentCategoryMatch(r, equipFilter) && equipmentRefineMatch(r, equipRefine);
     }).slice(0, 120);
   } else {
     rows = await fetchReferenceList(kind, q, 120);
@@ -1499,6 +1531,7 @@ function wireLibraryTab(){
   const query = document.getElementById('lib-query');
   const kind = document.getElementById('lib-kind');
   const equipFilter = document.getElementById('lib-equip-filter');
+  const equipRefine = document.getElementById('lib-equip-refine');
   const setA = document.getElementById('lib-set-a');
   const setB = document.getElementById('lib-set-b');
   const clear = document.getElementById('lib-clear-compare');
@@ -1517,6 +1550,7 @@ function wireLibraryTab(){
     kind.dataset.wired = '1';
     kind.addEventListener('change', ()=>{
       if(equipFilter)equipFilter.disabled = kind.value !== 'equipment';
+      if(equipRefine)equipRefine.disabled = kind.value !== 'equipment';
       runLibrarySearch();
     });
   }
@@ -1524,6 +1558,11 @@ function wireLibraryTab(){
     equipFilter.dataset.wired = '1';
     equipFilter.disabled = !kind || kind.value !== 'equipment';
     equipFilter.addEventListener('change', ()=>{ runLibrarySearch(); });
+  }
+  if(equipRefine && !equipRefine.dataset.wired){
+    equipRefine.dataset.wired = '1';
+    equipRefine.disabled = !kind || kind.value !== 'equipment';
+    equipRefine.addEventListener('change', ()=>{ runLibrarySearch(); });
   }
   if(setA && !setA.dataset.wired){
     setA.dataset.wired = '1';
