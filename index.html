@@ -956,27 +956,30 @@ function getReferenceBase(){
 }
 
 const LOCAL_REFERENCE_FILE_MAP = {
-  spells: 'data/spells.json',
-  equipment: 'data/equipment.json',
-  feats: 'data/feats.json',
-  bestiary: 'data/bestiary.json',
+  spells: ['data/spells.json', 'spells.json'],
+  equipment: ['data/equipment.json', 'equipment.json'],
+  feats: ['data/feats.json', 'feats.json'],
+  bestiary: ['data/bestiary.json', 'bestiary.json'],
 };
 const LOCAL_REFERENCE_CACHE = {};
 
 async function loadLocalReferenceData(kind){
   if(LOCAL_REFERENCE_CACHE[kind])return LOCAL_REFERENCE_CACHE[kind];
-  const file = LOCAL_REFERENCE_FILE_MAP[kind];
-  if(!file)return null;
-  try{
-    const resp = await fetch(file, { cache: 'no-store' });
-    if(!resp.ok)return null;
-    const data = await resp.json();
-    if(!Array.isArray(data))return null;
-    LOCAL_REFERENCE_CACHE[kind] = data;
-    return data;
-  }catch(_e){
-    return null;
+  const files = LOCAL_REFERENCE_FILE_MAP[kind];
+  if(!files || !files.length)return null;
+  for(const file of files){
+    try{
+      const resp = await fetch(file, { cache: 'no-store' });
+      if(!resp.ok)continue;
+      const data = await resp.json();
+      if(!Array.isArray(data))continue;
+      LOCAL_REFERENCE_CACHE[kind] = data;
+      return data;
+    }catch(_e){
+      // Try the next candidate path.
+    }
   }
+  return null;
 }
 
 const STATIC_REFERENCE_DATA = {
