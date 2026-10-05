@@ -1180,6 +1180,52 @@ function setDatalistOptions(id, names){
   });
 }
 
+function scoreNameMatch(name, q){
+  const n = (name || '').toLowerCase();
+  const t = (q || '').toLowerCase().trim();
+  if(!t)return 99;
+  if(n === t)return 0;
+  if(n.startsWith(t))return 1;
+  if(n.includes(` ${t}`))return 2;
+  if(n.includes(t))return 3;
+  return 99;
+}
+
+async function fetchAutocompleteNames(kind, q, limit = 80){
+  const target = (q || '').toLowerCase().trim();
+  if(!target)return [];
+
+  const local = await loadLocalReferenceData(kind);
+  if(local){
+    const names = local
+      .map(r => (r?.name || '').toString())
+      .filter(Boolean)
+      .filter(n => n.toLowerCase().includes(target));
+    const uniq = Array.from(new Set(names));
+    uniq.sort((a,b)=>{
+      const sa = scoreNameMatch(a, target);
+      const sb = scoreNameMatch(b, target);
+      if(sa !== sb)return sa - sb;
+      return a.localeCompare(b);
+    });
+    return uniq.slice(0, limit);
+  }
+
+  const rows = await fetchReferenceList(kind, q, Math.max(120, limit * 4));
+  const names = rows
+    .map(r => (r?.name || '').toString())
+    .filter(Boolean)
+    .filter(n => n.toLowerCase().includes(target));
+  const uniq = Array.from(new Set(names));
+  uniq.sort((a,b)=>{
+    const sa = scoreNameMatch(a, target);
+    const sb = scoreNameMatch(b, target);
+    if(sa !== sb)return sa - sb;
+    return a.localeCompare(b);
+  });
+  return uniq.slice(0, limit);
+}
+
 function summarizeRow(kind, row){
   if(kind === 'spells'){
     const rank = row.rank !== undefined && row.rank !== null ? `Rank ${row.rank}` : 'Rank ?';
@@ -1529,8 +1575,7 @@ function wireAutocompleteInput(inp, datalistId, kind){
     if(q.length < 2)return;
     clearTimeout(referenceDebounce);
     referenceDebounce = setTimeout(async ()=>{
-      const rows = await fetchReferenceList(kind, q, 30);
-      const names = rows.map(r=>r.name).filter(Boolean);
+      const names = await fetchAutocompleteNames(kind, q, 80);
       setDatalistOptions(datalistId, names);
     }, 200);
   });
