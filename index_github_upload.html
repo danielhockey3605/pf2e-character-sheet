@@ -1425,6 +1425,48 @@ function equipmentAnalysis(row){
   return lines.join('\n');
 }
 
+function cleanFoundryInlineText(value){
+  if(value === null || value === undefined)return '';
+  let text = String(value);
+  if(!text.trim())return '';
+
+  // Convert common Foundry inline damage syntax into readable text.
+  text = text.replace(/@Damage\[([^\]]+)\]/gi, (_m, inner) => {
+    const raw = String(inner || '').trim();
+    if(!raw)return 'damage';
+
+    const complex = raw.match(/^\((.*)\)\[([^\]]+)\]$/);
+    if(complex){
+      const formula = (complex[1] || '').replace(/@item\.level/gi, 'spell rank').trim();
+      const tags = (complex[2] || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .join(' ');
+      return [formula, tags, 'damage'].filter(Boolean).join(' ');
+    }
+
+    return `${raw.replace(/@item\.level/gi, 'spell rank')} damage`;
+  });
+
+  // Unwrap common link/compendium tokens to just their labels when available.
+  text = text.replace(/@(?:UUID|Compendium)\[[^\]]+\]\{([^}]+)\}/gi, '$1');
+  text = text.replace(/@(?:UUID|Compendium|Template|Check|Localize)\[[^\]]+\]/gi, '');
+
+  // Generic @Tag[value]{label} -> label, otherwise keep value.
+  text = text.replace(/@[A-Za-z]+\[([^\]]+)\]\{([^}]+)\}/g, '$2');
+  text = text.replace(/@[A-Za-z]+\[([^\]]+)\]/g, '$1');
+
+  // Strip html tags and tidy whitespace/newlines.
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<\/p>/gi, '\n\n');
+  text = text.replace(/<[^>]+>/g, '');
+  text = text.replace(/\r/g, '');
+  text = text.replace(/\n{3,}/g, '\n\n');
+
+  return text.trim();
+}
+
 function formatDetail(kind, row){
   if(!row)return 'No detail found.';
   if(kind === 'spells'){
@@ -1437,9 +1479,9 @@ function formatDetail(kind, row){
       `Cast Time: ${row.cast_time || ''}`,
       `Range: ${row.range || ''}`,
       `Duration: ${row.duration || ''}`,
-      `Damage: ${row.damage || ''}`,
+      `Damage: ${cleanFoundryInlineText(row.damage) || ''}`,
       '',
-      row.description || '',
+      cleanFoundryInlineText(row.description) || '',
     ].join('\n');
   }
   if(kind === 'equipment'){
@@ -1450,7 +1492,7 @@ function formatDetail(kind, row){
       `Level: ${row.level ?? ''}`,
       `Price: ${row.price || ''}`,
       `Bulk: ${row.bulk ?? ''}`,
-      `Damage: ${row.damage || ''}`,
+      `Damage: ${cleanFoundryInlineText(row.damage) || ''}`,
       `Traits: ${row.traits || ''}`,
       `Proficiency: ${row.proficiency_category || ''}`,
       `Range: ${row.range || ''}`,
@@ -1461,7 +1503,7 @@ function formatDetail(kind, row){
       `Speed Penalty: ${row.speed_penalty ?? ''}`,
       `Strength Req: ${row.strength_req ?? ''}`,
       '',
-      row.description || '',
+      cleanFoundryInlineText(row.description) || '',
     ].join('\n');
   }
   return [
@@ -1473,7 +1515,7 @@ function formatDetail(kind, row){
     `Action Type: ${row.action_type || ''}`,
     `Actions: ${row.actions || ''}`,
     '',
-    row.description || '',
+    cleanFoundryInlineText(row.description) || '',
   ].join('\n');
 }
 
@@ -1604,10 +1646,10 @@ function spellDetailText(row){
     `Targets: ${row.targets || ''}`,
     `Defense: ${row.defense || ''}`,
     `Duration: ${row.duration || ''}`,
-    `Damage: ${row.damage || ''}`,
+    `Damage: ${cleanFoundryInlineText(row.damage) || ''}`,
     `Source: ${row.source || ''}`,
     '',
-    row.description || '',
+    cleanFoundryInlineText(row.description) || '',
   ].join('\n');
 }
 
