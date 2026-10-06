@@ -1543,7 +1543,14 @@ function spellRankMatch(row, selectedRank){
 
 function spellTraditionMatch(row, selectedTradition){
   if(selectedTradition === 'all')return true;
-  const traditions = (row?.traditions || '').toString().toLowerCase();
+  const traditionsRaw = row?.traditions;
+  if(Array.isArray(traditionsRaw)){
+    if(!traditionsRaw.length)return true;
+    const joined = traditionsRaw.map(t => (t || '').toString().toLowerCase()).join(' ');
+    return joined.includes(selectedTradition);
+  }
+  const traditions = (traditionsRaw || '').toString().toLowerCase();
+  if(!traditions.trim())return true;
   return traditions.includes(selectedTradition);
 }
 
@@ -1627,6 +1634,11 @@ async function runSpellExplorerSearch(){
   const local = await loadLocalReferenceData('spells');
   const seed = local || (await fetchReferenceList('spells', query, 2000));
   const rows = Array.isArray(seed) ? seed : [];
+  const traditionRows = rows.filter(r => {
+    const t = r?.traditions;
+    if(Array.isArray(t))return t.length > 0;
+    return !!(t || '').toString().trim();
+  }).length;
   let filtered = rows.filter(row=>
     spellTraditionMatch(row, tradition) &&
     spellRankMatch(row, rank) &&
@@ -1653,7 +1665,10 @@ async function runSpellExplorerSearch(){
     return;
   }
 
-  statusEl.textContent = `${filtered.length} spell(s) found`;
+  const traditionNote = (tradition !== 'all' && traditionRows === 0)
+    ? ' (tradition data missing in catalog; tradition filter ignored)'
+    : '';
+  statusEl.textContent = `${filtered.length} spell(s) found${traditionNote}`;
   filtered.forEach(row=>{
     const btn = document.createElement('button');
     btn.type = 'button';
