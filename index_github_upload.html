@@ -593,6 +593,40 @@ tailwind.config = {
       <div class="section-card lg:col-span-2">
         <div class="section-title">⚔ Spell Details</div>
         <div id="spell-explore-detail" class="text-sm text-txt-muted whitespace-pre-wrap min-h-[260px]">Select a spell to view details.</div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mt-3 items-end">
+          <div class="sm:col-span-2">
+            <label class="text-[10px] text-txt-muted uppercase">Add To</label>
+            <select id="spell-explore-add-target" class="field-input w-full">
+              <option value="auto">Auto (recommended)</option>
+              <option value="slot">Spell Slots</option>
+              <option value="cantrip">Cantrips</option>
+              <option value="focus">Focus Spells</option>
+              <option value="innate">Innate Spells</option>
+              <option value="ritual">Rituals</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[10px] text-txt-muted uppercase">Rank</label>
+            <select id="spell-explore-add-rank" class="field-input w-full">
+              <option value="auto">Auto</option>
+              <option value="0">0</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+              <option value="10">10</option>
+            </select>
+          </div>
+          <div>
+            <button id="spell-explore-add-btn" type="button" class="profile-btn w-full">Add Selected Spell</button>
+          </div>
+        </div>
+        <div id="spell-explore-add-status" class="text-xs text-txt-muted mt-2">Select a spell result, then add it to your sheet.</div>
       </div>
     </div>
   </div>
@@ -1653,6 +1687,104 @@ function spellDetailText(row){
   ].join('\n');
 }
 
+function normalizeSpellRank(row){
+  const parsed = parseInt(row?.rank, 10);
+  if(Number.isNaN(parsed))return 1;
+  return Math.max(0, Math.min(10, parsed));
+}
+
+function resolveSpellDestination(row, requested){
+  if(requested && requested !== 'auto')return requested;
+  const spellType = (row?.spell_type || '').toString().toLowerCase();
+  const traits = (row?.traits || '').toString().toLowerCase();
+  const rank = normalizeSpellRank(row);
+
+  if(spellType.includes('ritual') || traits.includes('ritual'))return 'ritual';
+  if(spellType.includes('focus') || traits.includes('focus'))return 'focus';
+  if(spellType.includes('cantrip') || traits.includes('cantrip') || rank === 0)return 'cantrip';
+  return 'slot';
+}
+
+function findByNameIndex(list, name){
+  const target = (name || '').toString().trim().toLowerCase();
+  if(!target || !Array.isArray(list))return -1;
+  return list.findIndex(item => ((item?.name || '').toString().trim().toLowerCase() === target));
+}
+
+function firstEmptyNameIndex(list){
+  if(!Array.isArray(list))return -1;
+  return list.findIndex(item => !((item?.name || '').toString().trim()));
+}
+
+function addSpellToSheetFromExplorer(row, requestedTarget, requestedRank){
+  if(!row || !row.name)return { ok:false, message:'Select a spell first.' };
+
+  const destination = resolveSpellDestination(row, requestedTarget);
+  const rank = requestedRank === 'auto' ? normalizeSpellRank(row) : Math.max(0, Math.min(10, parseInt(requestedRank, 10) || normalizeSpellRank(row)));
+  const spellName = (row.name || '').toString().trim();
+  const castTime = (row.cast_time || '').toString().trim();
+  const traits = (row.traits || '').toString().trim();
+  const desc = cleanFoundryInlineText(row.description || '');
+
+  if(destination === 'cantrip'){
+    const existing = findByNameIndex(CD.cantrips, spellName);
+    const idx = existing >= 0 ? existing : firstEmptyNameIndex(CD.cantrips);
+    if(idx < 0)return { ok:false, message:'Cantrip list is full. Clear a row and try again.' };
+    CD.cantrips[idx].name = spellName;
+    CD.cantrips[idx].actions = castTime || CD.cantrips[idx].actions;
+    CD.cantrips[idx].traits = traits || CD.cantrips[idx].traits;
+    CD.cantrips[idx].desc = desc || CD.cantrips[idx].desc;
+    return { ok:true, message: existing >= 0 ? `${spellName} updated in Cantrips.` : `${spellName} added to Cantrips.` };
+  }
+
+  if(destination === 'focus'){
+    const existing = findByNameIndex(CD.focusSpells, spellName);
+    const idx = existing >= 0 ? existing : firstEmptyNameIndex(CD.focusSpells);
+    if(idx < 0)return { ok:false, message:'Focus spell list is full. Clear a row and try again.' };
+    CD.focusSpells[idx].name = spellName;
+    CD.focusSpells[idx].actions = castTime || CD.focusSpells[idx].actions;
+    CD.focusSpells[idx].traits = traits || CD.focusSpells[idx].traits;
+    CD.focusSpells[idx].desc = desc || CD.focusSpells[idx].desc;
+    return { ok:true, message: existing >= 0 ? `${spellName} updated in Focus Spells.` : `${spellName} added to Focus Spells.` };
+  }
+
+  if(destination === 'innate'){
+    const existing = findByNameIndex(CD.innateSpells, spellName);
+    const idx = existing >= 0 ? existing : firstEmptyNameIndex(CD.innateSpells);
+    if(idx < 0)return { ok:false, message:'Innate spell list is full. Clear a row and try again.' };
+    CD.innateSpells[idx].name = spellName;
+    CD.innateSpells[idx].level = String(rank);
+    CD.innateSpells[idx].notes = desc || CD.innateSpells[idx].notes;
+    return { ok:true, message: existing >= 0 ? `${spellName} updated in Innate Spells.` : `${spellName} added to Innate Spells.` };
+  }
+
+  if(destination === 'ritual'){
+    const existing = findByNameIndex(CD.rituals, spellName);
+    const idx = existing >= 0 ? existing : firstEmptyNameIndex(CD.rituals);
+    if(idx < 0)return { ok:false, message:'Ritual list is full. Clear a row and try again.' };
+    CD.rituals[idx].name = spellName;
+    CD.rituals[idx].level = rank;
+    CD.rituals[idx].traits = traits || CD.rituals[idx].traits;
+    CD.rituals[idx].effect = desc || CD.rituals[idx].effect;
+    return { ok:true, message: existing >= 0 ? `${spellName} updated in Rituals.` : `${spellName} added to Rituals.` };
+  }
+
+  const level = Math.max(1, Math.min(10, rank || 1));
+  const key = `lvl${level}`;
+  if(!Array.isArray(CD.spellNames[key]))CD.spellNames[key] = Array(4).fill('');
+
+  const existingSlot = CD.spellNames[key].findIndex(n => (n || '').toString().trim().toLowerCase() === spellName.toLowerCase());
+  if(existingSlot >= 0){
+    return { ok:true, message:`${spellName} is already in Level ${level} spell names.` };
+  }
+  const emptySlot = CD.spellNames[key].findIndex(n => !(n || '').toString().trim());
+  if(emptySlot < 0){
+    return { ok:false, message:`Level ${level} spell name row is full. Replace one manually or choose another destination.` };
+  }
+  CD.spellNames[key][emptySlot] = spellName;
+  return { ok:true, message:`${spellName} added to Level ${level} spell names.` };
+}
+
 async function runSpellExplorerSearch(){
   const qEl = document.getElementById('spell-explore-query');
   const traditionEl = document.getElementById('spell-explore-tradition');
@@ -1736,6 +1868,10 @@ function wireSpellExplorerTab(){
   const traditionEl = document.getElementById('spell-explore-tradition');
   const rankEl = document.getElementById('spell-explore-rank');
   const typeEl = document.getElementById('spell-explore-type');
+  const addBtn = document.getElementById('spell-explore-add-btn');
+  const addTargetEl = document.getElementById('spell-explore-add-target');
+  const addRankEl = document.getElementById('spell-explore-add-rank');
+  const addStatusEl = document.getElementById('spell-explore-add-status');
 
   if(btn && !btn.dataset.wired){
     btn.dataset.wired = '1';
@@ -1760,6 +1896,19 @@ function wireSpellExplorerTab(){
   if(typeEl && !typeEl.dataset.wired){
     typeEl.dataset.wired = '1';
     typeEl.addEventListener('change', ()=>{ runSpellExplorerSearch(); });
+  }
+
+  if(addBtn && !addBtn.dataset.wired){
+    addBtn.dataset.wired = '1';
+    addBtn.addEventListener('click', ()=>{
+      const target = addTargetEl?.value || 'auto';
+      const rankChoice = addRankEl?.value || 'auto';
+      const result = addSpellToSheetFromExplorer(spellExploreSelected, target, rankChoice);
+      if(addStatusEl)addStatusEl.textContent = result.message;
+      if(!result.ok)return;
+      buildAll();
+      saveData();
+    });
   }
 
   // Initial spell browse load so users see data immediately.
