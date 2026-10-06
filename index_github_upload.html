@@ -534,6 +534,69 @@ tailwind.config = {
     </div>
   </div>
 
+  <div class="section-card">
+    <div class="section-title">⚔ Spell Explorer</div>
+    <div class="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end">
+      <div class="sm:col-span-2">
+        <label class="text-[10px] text-txt-muted uppercase">Tradition</label>
+        <select id="spell-explore-tradition" class="field-input w-full">
+          <option value="all">All Traditions</option>
+          <option value="arcane">Arcane</option>
+          <option value="divine">Divine</option>
+          <option value="occult">Occult</option>
+          <option value="primal">Primal</option>
+          <option value="elemental">Elemental</option>
+        </select>
+      </div>
+      <div class="sm:col-span-1">
+        <label class="text-[10px] text-txt-muted uppercase">Rank</label>
+        <select id="spell-explore-rank" class="field-input w-full">
+          <option value="all">All</option>
+          <option value="0">Cantrip (0)</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+      <div class="sm:col-span-1">
+        <label class="text-[10px] text-txt-muted uppercase">Spell Type</label>
+        <select id="spell-explore-type" class="field-input w-full">
+          <option value="all">All</option>
+          <option value="cantrip">Cantrip</option>
+          <option value="spell">Spell</option>
+          <option value="focus">Focus</option>
+          <option value="ritual">Ritual</option>
+        </select>
+      </div>
+      <div class="sm:col-span-2">
+        <label class="text-[10px] text-txt-muted uppercase">Search</label>
+        <input id="spell-explore-query" class="field-input w-full" placeholder="Type spell name, trait, range, effect..." />
+      </div>
+      <div class="sm:col-span-1">
+        <button id="spell-explore-search-btn" type="button" class="profile-btn w-full">Search</button>
+      </div>
+    </div>
+    <div id="spell-explore-status" class="text-xs text-txt-muted mt-3">Enter search text or use filters to browse spells.</div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+      <div class="section-card lg:col-span-1">
+        <div class="section-title">⚔ Spell Matches</div>
+        <div id="spell-explore-results" class="space-y-1 max-h-[420px] overflow-auto"></div>
+      </div>
+      <div class="section-card lg:col-span-2">
+        <div class="section-title">⚔ Spell Details</div>
+        <div id="spell-explore-detail" class="text-sm text-txt-muted whitespace-pre-wrap min-h-[260px]">Select a spell to view details.</div>
+      </div>
+    </div>
+  </div>
+
   <div data-id="361" class="section-card">
     <div data-id="362" class="section-title">⚔ Focus Spells</div>
     <div data-id="363" class="flex items-center gap-3 mb-3">
@@ -598,6 +661,19 @@ tailwind.config = {
           <option value="shield">Shields</option>
           <option value="consumable">Consumables</option>
           <option value="gear">Adventuring Gear</option>
+        </select>
+      </div>
+      <div class="sm:col-span-2">
+        <label class="text-[10px] text-txt-muted uppercase">Proficiency / Armor Class</label>
+        <select id="lib-equip-refine" class="field-input w-full">
+          <option value="all">All</option>
+          <option value="simple">Simple Weapons</option>
+          <option value="martial">Martial Weapons</option>
+          <option value="advanced">Advanced Weapons</option>
+          <option value="light">Light Armor</option>
+          <option value="medium">Medium Armor</option>
+          <option value="heavy">Heavy Armor</option>
+          <option value="shield">Shield</option>
         </select>
       </div>
       <div class="sm:col-span-3">
@@ -776,6 +852,8 @@ let referenceDebounce = null;
 let libSelected = null;
 let libCompareA = null;
 let libCompareB = null;
+let spellExploreSelected = null;
+let spellExploreDebounce = null;
 
 function normalizeApiBase(raw){
   if(!raw)return '';
@@ -956,27 +1034,30 @@ function getReferenceBase(){
 }
 
 const LOCAL_REFERENCE_FILE_MAP = {
-  spells: 'data/spells.json',
-  equipment: 'data/equipment.json',
-  feats: 'data/feats.json',
-  bestiary: 'data/bestiary.json',
+  spells: ['data/spells.json', 'spells.json'],
+  equipment: ['data/equipment.json', 'equipment.json'],
+  feats: ['data/feats.json', 'feats.json'],
+  bestiary: ['data/bestiary.json', 'bestiary.json'],
 };
 const LOCAL_REFERENCE_CACHE = {};
 
 async function loadLocalReferenceData(kind){
   if(LOCAL_REFERENCE_CACHE[kind])return LOCAL_REFERENCE_CACHE[kind];
-  const file = LOCAL_REFERENCE_FILE_MAP[kind];
-  if(!file)return null;
-  try{
-    const resp = await fetch(file, { cache: 'no-store' });
-    if(!resp.ok)return null;
-    const data = await resp.json();
-    if(!Array.isArray(data))return null;
-    LOCAL_REFERENCE_CACHE[kind] = data;
-    return data;
-  }catch(_e){
-    return null;
+  const files = LOCAL_REFERENCE_FILE_MAP[kind];
+  if(!files || !files.length)return null;
+  for(const file of files){
+    try{
+      const resp = await fetch(file, { cache: 'no-store' });
+      if(!resp.ok)continue;
+      const data = await resp.json();
+      if(!Array.isArray(data))continue;
+      LOCAL_REFERENCE_CACHE[kind] = data;
+      return data;
+    }catch(_e){
+      // Try the next candidate path.
+    }
   }
+  return null;
 }
 
 const STATIC_REFERENCE_DATA = {
@@ -1180,6 +1261,52 @@ function setDatalistOptions(id, names){
   });
 }
 
+function scoreNameMatch(name, q){
+  const n = (name || '').toLowerCase();
+  const t = (q || '').toLowerCase().trim();
+  if(!t)return 99;
+  if(n === t)return 0;
+  if(n.startsWith(t))return 1;
+  if(n.includes(` ${t}`))return 2;
+  if(n.includes(t))return 3;
+  return 99;
+}
+
+async function fetchAutocompleteNames(kind, q, limit = 80){
+  const target = (q || '').toLowerCase().trim();
+  if(!target)return [];
+
+  const local = await loadLocalReferenceData(kind);
+  if(local){
+    const names = local
+      .map(r => (r?.name || '').toString())
+      .filter(Boolean)
+      .filter(n => n.toLowerCase().includes(target));
+    const uniq = Array.from(new Set(names));
+    uniq.sort((a,b)=>{
+      const sa = scoreNameMatch(a, target);
+      const sb = scoreNameMatch(b, target);
+      if(sa !== sb)return sa - sb;
+      return a.localeCompare(b);
+    });
+    return uniq.slice(0, limit);
+  }
+
+  const rows = await fetchReferenceList(kind, q, Math.max(120, limit * 4));
+  const names = rows
+    .map(r => (r?.name || '').toString())
+    .filter(Boolean)
+    .filter(n => n.toLowerCase().includes(target));
+  const uniq = Array.from(new Set(names));
+  uniq.sort((a,b)=>{
+    const sa = scoreNameMatch(a, target);
+    const sb = scoreNameMatch(b, target);
+    if(sa !== sb)return sa - sb;
+    return a.localeCompare(b);
+  });
+  return uniq.slice(0, limit);
+}
+
 function summarizeRow(kind, row){
   if(kind === 'spells'){
     const rank = row.rank !== undefined && row.rank !== null ? `Rank ${row.rank}` : 'Rank ?';
@@ -1208,6 +1335,39 @@ function equipmentCategoryMatch(row, selectedFilter){
   if(selectedFilter === 'consumable') return text.includes('consumable') || text.includes('potion') || text.includes('elixir');
   if(selectedFilter === 'gear') return text.includes('gear') || text.includes('adventuring');
   return true;
+}
+
+function equipmentRefineMatch(row, refineFilter){
+  if(!row || refineFilter === 'all')return true;
+  const prof = (row.proficiency_category || '').toString().toLowerCase();
+  const itemType = (row.item_type || '').toString().toLowerCase();
+  const category = (row.category || '').toString().toLowerCase();
+  const text = `${prof} ${itemType} ${category}`;
+
+  if(refineFilter === 'simple')return text.includes('simple');
+  if(refineFilter === 'martial')return text.includes('martial');
+  if(refineFilter === 'advanced')return text.includes('advanced');
+  if(refineFilter === 'light')return text.includes('light armor');
+  if(refineFilter === 'medium')return text.includes('medium armor');
+  if(refineFilter === 'heavy')return text.includes('heavy armor');
+  if(refineFilter === 'shield')return text.includes('shield');
+  return true;
+}
+
+function equipmentQueryMatch(row, qLower){
+  if(!qLower)return true;
+  const fields = [
+    row?.name,
+    row?.item_type,
+    row?.category,
+    row?.traits,
+    row?.proficiency_category,
+    row?.damage,
+    row?.range,
+    row?.reload,
+  ];
+  const hay = fields.map(v => (v || '').toString().toLowerCase()).join(' ');
+  return hay.includes(qLower);
 }
 
 function parseNum(v, fallback=0){
@@ -1375,9 +1535,199 @@ function compareEntries(a, b){
   return rows.join('\n\n');
 }
 
+function spellRankMatch(row, selectedRank){
+  if(selectedRank === 'all')return true;
+  const rank = String((row?.rank ?? '')).trim();
+  return rank === selectedRank;
+}
+
+function spellTraditionMatch(row, selectedTradition){
+  if(selectedTradition === 'all')return true;
+  const traditionsRaw = row?.traditions;
+  if(Array.isArray(traditionsRaw)){
+    if(!traditionsRaw.length)return true;
+    const joined = traditionsRaw.map(t => (t || '').toString().toLowerCase()).join(' ');
+    return joined.includes(selectedTradition);
+  }
+  const traditions = (traditionsRaw || '').toString().toLowerCase();
+  if(!traditions.trim())return true;
+  return traditions.includes(selectedTradition);
+}
+
+function spellTypeMatch(row, selectedType){
+  if(selectedType === 'all')return true;
+  const spellType = (row?.spell_type || '').toString().toLowerCase();
+  const traits = (row?.traits || '').toString().toLowerCase();
+  if(selectedType === 'focus')return spellType.includes('focus') || traits.includes('focus');
+  return spellType.includes(selectedType) || traits.includes(selectedType);
+}
+
+function spellQueryMatch(row, qLower){
+  if(!qLower)return true;
+  const fields = [
+    row?.name,
+    row?.spell_type,
+    row?.traditions,
+    row?.traits,
+    row?.cast_time,
+    row?.range,
+    row?.duration,
+    row?.damage,
+    row?.description,
+    row?.area,
+    row?.targets,
+    row?.defense,
+    row?.source,
+  ];
+  const hay = fields.map(v => (v || '').toString().toLowerCase()).join(' ');
+  return hay.includes(qLower);
+}
+
+function spellResultSummary(row){
+  const rank = row?.rank ?? '?';
+  const spellType = row?.spell_type || 'Spell';
+  const traditions = row?.traditions || '';
+  return `${row?.name || '(unnamed)'} - Rank ${rank} - ${spellType}${traditions ? ` - ${traditions}` : ''}`;
+}
+
+function spellDetailText(row){
+  if(!row)return 'No spell selected.';
+  return [
+    `Name: ${row.name || ''}`,
+    `Rank: ${row.rank ?? ''}`,
+    `Type: ${row.spell_type || ''}`,
+    `Traditions: ${row.traditions || ''}`,
+    `Traits: ${row.traits || ''}`,
+    `Cast Time: ${row.cast_time || ''}`,
+    `Range: ${row.range || ''}`,
+    `Area: ${row.area || ''}`,
+    `Targets: ${row.targets || ''}`,
+    `Defense: ${row.defense || ''}`,
+    `Duration: ${row.duration || ''}`,
+    `Damage: ${row.damage || ''}`,
+    `Source: ${row.source || ''}`,
+    '',
+    row.description || '',
+  ].join('\n');
+}
+
+async function runSpellExplorerSearch(){
+  const qEl = document.getElementById('spell-explore-query');
+  const traditionEl = document.getElementById('spell-explore-tradition');
+  const rankEl = document.getElementById('spell-explore-rank');
+  const typeEl = document.getElementById('spell-explore-type');
+  const statusEl = document.getElementById('spell-explore-status');
+  const resultsEl = document.getElementById('spell-explore-results');
+  const detailEl = document.getElementById('spell-explore-detail');
+  if(!qEl || !traditionEl || !rankEl || !typeEl || !statusEl || !resultsEl || !detailEl)return;
+
+  const query = (qEl.value || '').trim();
+  const qLower = query.toLowerCase();
+  const tradition = traditionEl.value || 'all';
+  const rank = rankEl.value || 'all';
+  const spellType = typeEl.value || 'all';
+
+  statusEl.textContent = 'Searching spells...';
+  resultsEl.innerHTML = '';
+  detailEl.textContent = 'Select a spell to view details.';
+
+  const local = await loadLocalReferenceData('spells');
+  const seed = local || (await fetchReferenceList('spells', query, 2000));
+  const rows = Array.isArray(seed) ? seed : [];
+  const traditionRows = rows.filter(r => {
+    const t = r?.traditions;
+    if(Array.isArray(t))return t.length > 0;
+    return !!(t || '').toString().trim();
+  }).length;
+  let filtered = rows.filter(row=>
+    spellTraditionMatch(row, tradition) &&
+    spellRankMatch(row, rank) &&
+    spellTypeMatch(row, spellType) &&
+    spellQueryMatch(row, qLower)
+  ).slice(0, 200);
+
+  // If strict matching produced nothing, try a lighter fallback pass.
+  if(!filtered.length && qLower){
+    filtered = rows.filter(row=>{
+      const name = (row?.name || '').toString().toLowerCase();
+      const traits = (row?.traits || '').toString().toLowerCase();
+      return (
+        spellTraditionMatch(row, tradition) &&
+        spellRankMatch(row, rank) &&
+        spellTypeMatch(row, spellType) &&
+        (name.includes(qLower) || traits.includes(qLower))
+      );
+    }).slice(0, 200);
+  }
+
+  if(!filtered.length){
+    statusEl.textContent = 'No spells found for the current filters.';
+    return;
+  }
+
+  const traditionNote = (tradition !== 'all' && traditionRows === 0)
+    ? ' (tradition data missing in catalog; tradition filter ignored)'
+    : '';
+  statusEl.textContent = `${filtered.length} spell(s) found${traditionNote}`;
+  filtered.forEach(row=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'profile-btn w-full text-left';
+    btn.style.whiteSpace = 'normal';
+    btn.textContent = spellResultSummary(row);
+    btn.addEventListener('click', async ()=>{
+      let detail = row;
+      if(row?.name){
+        const looked = await fetchReferenceLookup('spells', row.name);
+        if(looked)detail = looked;
+      }
+      spellExploreSelected = detail;
+      detailEl.textContent = spellDetailText(detail);
+    });
+    resultsEl.appendChild(btn);
+  });
+}
+
+function wireSpellExplorerTab(){
+  const btn = document.getElementById('spell-explore-search-btn');
+  const qEl = document.getElementById('spell-explore-query');
+  const traditionEl = document.getElementById('spell-explore-tradition');
+  const rankEl = document.getElementById('spell-explore-rank');
+  const typeEl = document.getElementById('spell-explore-type');
+
+  if(btn && !btn.dataset.wired){
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', ()=>{ runSpellExplorerSearch(); });
+  }
+  if(qEl && !qEl.dataset.wired){
+    qEl.dataset.wired = '1';
+    qEl.addEventListener('keydown', (e)=>{ if(e.key === 'Enter')runSpellExplorerSearch(); });
+    qEl.addEventListener('input', ()=>{
+      clearTimeout(spellExploreDebounce);
+      spellExploreDebounce = setTimeout(()=>{ runSpellExplorerSearch(); }, 220);
+    });
+  }
+  if(traditionEl && !traditionEl.dataset.wired){
+    traditionEl.dataset.wired = '1';
+    traditionEl.addEventListener('change', ()=>{ runSpellExplorerSearch(); });
+  }
+  if(rankEl && !rankEl.dataset.wired){
+    rankEl.dataset.wired = '1';
+    rankEl.addEventListener('change', ()=>{ runSpellExplorerSearch(); });
+  }
+  if(typeEl && !typeEl.dataset.wired){
+    typeEl.dataset.wired = '1';
+    typeEl.addEventListener('change', ()=>{ runSpellExplorerSearch(); });
+  }
+
+  // Initial spell browse load so users see data immediately.
+  runSpellExplorerSearch();
+}
+
 async function runLibrarySearch(){
   const kindEl = document.getElementById('lib-kind');
   const equipFilterEl = document.getElementById('lib-equip-filter');
+  const equipRefineEl = document.getElementById('lib-equip-refine');
   const queryEl = document.getElementById('lib-query');
   const statusEl = document.getElementById('lib-status');
   const resultsEl = document.getElementById('lib-results');
@@ -1387,6 +1737,7 @@ async function runLibrarySearch(){
 
   const kind = kindEl.value;
   const equipFilter = equipFilterEl ? equipFilterEl.value : 'all';
+  const equipRefine = equipRefineEl ? equipRefineEl.value : 'all';
   const q = (queryEl.value || '').trim();
   resultsEl.innerHTML = '';
   detailEl.textContent = 'Select a result to view details.';
@@ -1400,12 +1751,15 @@ async function runLibrarySearch(){
   statusEl.textContent = 'Searching...';
   let rows = [];
   if(kind === 'equipment'){
-    const seed = (await loadLocalReferenceData('equipment')) || (await fetchReferenceList(kind, q, 2000));
-    statusEl.textContent = `Searching equipment catalog (${seed.length} items)...`;
+    const localSeed = await loadLocalReferenceData('equipment');
+    const usingFallback = !localSeed;
+    const seed = localSeed || staticReferenceSearch('equipment', '', 5000);
+    statusEl.textContent = usingFallback
+      ? `Using fallback sample data (${seed.length} items). Upload data/equipment.json for full catalog results.`
+      : `Searching equipment catalog (${seed.length} items)...`;
     const qLower = q.toLowerCase();
     rows = seed.filter(r=>{
-      const hay = [r.name, r.item_type, r.category, r.traits, r.description, r.proficiency_category, r.damage].map(v=>(v||'').toString().toLowerCase()).join(' ');
-      return hay.includes(qLower) && equipmentCategoryMatch(r, equipFilter);
+      return equipmentQueryMatch(r, qLower) && equipmentCategoryMatch(r, equipFilter) && equipmentRefineMatch(r, equipRefine);
     }).slice(0, 120);
   } else {
     rows = await fetchReferenceList(kind, q, 120);
@@ -1446,6 +1800,7 @@ function wireLibraryTab(){
   const query = document.getElementById('lib-query');
   const kind = document.getElementById('lib-kind');
   const equipFilter = document.getElementById('lib-equip-filter');
+  const equipRefine = document.getElementById('lib-equip-refine');
   const setA = document.getElementById('lib-set-a');
   const setB = document.getElementById('lib-set-b');
   const clear = document.getElementById('lib-clear-compare');
@@ -1464,6 +1819,7 @@ function wireLibraryTab(){
     kind.dataset.wired = '1';
     kind.addEventListener('change', ()=>{
       if(equipFilter)equipFilter.disabled = kind.value !== 'equipment';
+      if(equipRefine)equipRefine.disabled = kind.value !== 'equipment';
       runLibrarySearch();
     });
   }
@@ -1471,6 +1827,11 @@ function wireLibraryTab(){
     equipFilter.dataset.wired = '1';
     equipFilter.disabled = !kind || kind.value !== 'equipment';
     equipFilter.addEventListener('change', ()=>{ runLibrarySearch(); });
+  }
+  if(equipRefine && !equipRefine.dataset.wired){
+    equipRefine.dataset.wired = '1';
+    equipRefine.disabled = !kind || kind.value !== 'equipment';
+    equipRefine.addEventListener('change', ()=>{ runLibrarySearch(); });
   }
   if(setA && !setA.dataset.wired){
     setA.dataset.wired = '1';
@@ -1525,8 +1886,7 @@ function wireAutocompleteInput(inp, datalistId, kind){
     if(q.length < 2)return;
     clearTimeout(referenceDebounce);
     referenceDebounce = setTimeout(async ()=>{
-      const rows = await fetchReferenceList(kind, q, 30);
-      const names = rows.map(r=>r.name).filter(Boolean);
+      const names = await fetchAutocompleteNames(kind, q, 80);
       setDatalistOptions(datalistId, names);
     }, 200);
   });
@@ -2473,6 +2833,7 @@ loadData();
 buildAll();
 wireSimpleInputs();
 wireLibraryTab();
+wireSpellExplorerTab();
 renderProfileControls();
 attachProfileControls();
 
