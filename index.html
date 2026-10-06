@@ -853,6 +853,7 @@ let libSelected = null;
 let libCompareA = null;
 let libCompareB = null;
 let spellExploreSelected = null;
+let spellExploreDebounce = null;
 
 function normalizeApiBase(raw){
   if(!raw)return '';
@@ -1625,12 +1626,27 @@ async function runSpellExplorerSearch(){
 
   const local = await loadLocalReferenceData('spells');
   const seed = local || (await fetchReferenceList('spells', query, 2000));
-  const filtered = (seed || []).filter(row=>
+  const rows = Array.isArray(seed) ? seed : [];
+  let filtered = rows.filter(row=>
     spellTraditionMatch(row, tradition) &&
     spellRankMatch(row, rank) &&
     spellTypeMatch(row, spellType) &&
     spellQueryMatch(row, qLower)
   ).slice(0, 200);
+
+  // If strict matching produced nothing, try a lighter fallback pass.
+  if(!filtered.length && qLower){
+    filtered = rows.filter(row=>{
+      const name = (row?.name || '').toString().toLowerCase();
+      const traits = (row?.traits || '').toString().toLowerCase();
+      return (
+        spellTraditionMatch(row, tradition) &&
+        spellRankMatch(row, rank) &&
+        spellTypeMatch(row, spellType) &&
+        (name.includes(qLower) || traits.includes(qLower))
+      );
+    }).slice(0, 200);
+  }
 
   if(!filtered.length){
     statusEl.textContent = 'No spells found for the current filters.';
@@ -1671,6 +1687,10 @@ function wireSpellExplorerTab(){
   if(qEl && !qEl.dataset.wired){
     qEl.dataset.wired = '1';
     qEl.addEventListener('keydown', (e)=>{ if(e.key === 'Enter')runSpellExplorerSearch(); });
+    qEl.addEventListener('input', ()=>{
+      clearTimeout(spellExploreDebounce);
+      spellExploreDebounce = setTimeout(()=>{ runSpellExplorerSearch(); }, 220);
+    });
   }
   if(traditionEl && !traditionEl.dataset.wired){
     traditionEl.dataset.wired = '1';
@@ -1684,6 +1704,9 @@ function wireSpellExplorerTab(){
     typeEl.dataset.wired = '1';
     typeEl.addEventListener('change', ()=>{ runSpellExplorerSearch(); });
   }
+
+  // Initial spell browse load so users see data immediately.
+  runSpellExplorerSearch();
 }
 
 async function runLibrarySearch(){
