@@ -534,6 +534,69 @@ tailwind.config = {
     </div>
   </div>
 
+  <div class="section-card">
+    <div class="section-title">⚔ Spell Explorer</div>
+    <div class="grid grid-cols-1 sm:grid-cols-6 gap-2 items-end">
+      <div class="sm:col-span-2">
+        <label class="text-[10px] text-txt-muted uppercase">Tradition</label>
+        <select id="spell-explore-tradition" class="field-input w-full">
+          <option value="all">All Traditions</option>
+          <option value="arcane">Arcane</option>
+          <option value="divine">Divine</option>
+          <option value="occult">Occult</option>
+          <option value="primal">Primal</option>
+          <option value="elemental">Elemental</option>
+        </select>
+      </div>
+      <div class="sm:col-span-1">
+        <label class="text-[10px] text-txt-muted uppercase">Rank</label>
+        <select id="spell-explore-rank" class="field-input w-full">
+          <option value="all">All</option>
+          <option value="0">Cantrip (0)</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+      <div class="sm:col-span-1">
+        <label class="text-[10px] text-txt-muted uppercase">Spell Type</label>
+        <select id="spell-explore-type" class="field-input w-full">
+          <option value="all">All</option>
+          <option value="cantrip">Cantrip</option>
+          <option value="spell">Spell</option>
+          <option value="focus">Focus</option>
+          <option value="ritual">Ritual</option>
+        </select>
+      </div>
+      <div class="sm:col-span-2">
+        <label class="text-[10px] text-txt-muted uppercase">Search</label>
+        <input id="spell-explore-query" class="field-input w-full" placeholder="Type spell name, trait, range, effect..." />
+      </div>
+      <div class="sm:col-span-1">
+        <button id="spell-explore-search-btn" type="button" class="profile-btn w-full">Search</button>
+      </div>
+    </div>
+    <div id="spell-explore-status" class="text-xs text-txt-muted mt-3">Enter search text or use filters to browse spells.</div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+      <div class="section-card lg:col-span-1">
+        <div class="section-title">⚔ Spell Matches</div>
+        <div id="spell-explore-results" class="space-y-1 max-h-[420px] overflow-auto"></div>
+      </div>
+      <div class="section-card lg:col-span-2">
+        <div class="section-title">⚔ Spell Details</div>
+        <div id="spell-explore-detail" class="text-sm text-txt-muted whitespace-pre-wrap min-h-[260px]">Select a spell to view details.</div>
+      </div>
+    </div>
+  </div>
+
   <div data-id="361" class="section-card">
     <div data-id="362" class="section-title">⚔ Focus Spells</div>
     <div data-id="363" class="flex items-center gap-3 mb-3">
@@ -789,6 +852,7 @@ let referenceDebounce = null;
 let libSelected = null;
 let libCompareA = null;
 let libCompareB = null;
+let spellExploreSelected = null;
 
 function normalizeApiBase(raw){
   if(!raw)return '';
@@ -1289,6 +1353,22 @@ function equipmentRefineMatch(row, refineFilter){
   return true;
 }
 
+function equipmentQueryMatch(row, qLower){
+  if(!qLower)return true;
+  const fields = [
+    row?.name,
+    row?.item_type,
+    row?.category,
+    row?.traits,
+    row?.proficiency_category,
+    row?.damage,
+    row?.range,
+    row?.reload,
+  ];
+  const hay = fields.map(v => (v || '').toString().toLowerCase()).join(' ');
+  return hay.includes(qLower);
+}
+
 function parseNum(v, fallback=0){
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
@@ -1454,6 +1534,158 @@ function compareEntries(a, b){
   return rows.join('\n\n');
 }
 
+function spellRankMatch(row, selectedRank){
+  if(selectedRank === 'all')return true;
+  const rank = String((row?.rank ?? '')).trim();
+  return rank === selectedRank;
+}
+
+function spellTraditionMatch(row, selectedTradition){
+  if(selectedTradition === 'all')return true;
+  const traditions = (row?.traditions || '').toString().toLowerCase();
+  return traditions.includes(selectedTradition);
+}
+
+function spellTypeMatch(row, selectedType){
+  if(selectedType === 'all')return true;
+  const spellType = (row?.spell_type || '').toString().toLowerCase();
+  const traits = (row?.traits || '').toString().toLowerCase();
+  if(selectedType === 'focus')return spellType.includes('focus') || traits.includes('focus');
+  return spellType.includes(selectedType) || traits.includes(selectedType);
+}
+
+function spellQueryMatch(row, qLower){
+  if(!qLower)return true;
+  const fields = [
+    row?.name,
+    row?.spell_type,
+    row?.traditions,
+    row?.traits,
+    row?.cast_time,
+    row?.range,
+    row?.duration,
+    row?.damage,
+    row?.description,
+    row?.area,
+    row?.targets,
+    row?.defense,
+    row?.source,
+  ];
+  const hay = fields.map(v => (v || '').toString().toLowerCase()).join(' ');
+  return hay.includes(qLower);
+}
+
+function spellResultSummary(row){
+  const rank = row?.rank ?? '?';
+  const spellType = row?.spell_type || 'Spell';
+  const traditions = row?.traditions || '';
+  return `${row?.name || '(unnamed)'} - Rank ${rank} - ${spellType}${traditions ? ` - ${traditions}` : ''}`;
+}
+
+function spellDetailText(row){
+  if(!row)return 'No spell selected.';
+  return [
+    `Name: ${row.name || ''}`,
+    `Rank: ${row.rank ?? ''}`,
+    `Type: ${row.spell_type || ''}`,
+    `Traditions: ${row.traditions || ''}`,
+    `Traits: ${row.traits || ''}`,
+    `Cast Time: ${row.cast_time || ''}`,
+    `Range: ${row.range || ''}`,
+    `Area: ${row.area || ''}`,
+    `Targets: ${row.targets || ''}`,
+    `Defense: ${row.defense || ''}`,
+    `Duration: ${row.duration || ''}`,
+    `Damage: ${row.damage || ''}`,
+    `Source: ${row.source || ''}`,
+    '',
+    row.description || '',
+  ].join('\n');
+}
+
+async function runSpellExplorerSearch(){
+  const qEl = document.getElementById('spell-explore-query');
+  const traditionEl = document.getElementById('spell-explore-tradition');
+  const rankEl = document.getElementById('spell-explore-rank');
+  const typeEl = document.getElementById('spell-explore-type');
+  const statusEl = document.getElementById('spell-explore-status');
+  const resultsEl = document.getElementById('spell-explore-results');
+  const detailEl = document.getElementById('spell-explore-detail');
+  if(!qEl || !traditionEl || !rankEl || !typeEl || !statusEl || !resultsEl || !detailEl)return;
+
+  const query = (qEl.value || '').trim();
+  const qLower = query.toLowerCase();
+  const tradition = traditionEl.value || 'all';
+  const rank = rankEl.value || 'all';
+  const spellType = typeEl.value || 'all';
+
+  statusEl.textContent = 'Searching spells...';
+  resultsEl.innerHTML = '';
+  detailEl.textContent = 'Select a spell to view details.';
+
+  const local = await loadLocalReferenceData('spells');
+  const seed = local || (await fetchReferenceList('spells', query, 2000));
+  const filtered = (seed || []).filter(row=>
+    spellTraditionMatch(row, tradition) &&
+    spellRankMatch(row, rank) &&
+    spellTypeMatch(row, spellType) &&
+    spellQueryMatch(row, qLower)
+  ).slice(0, 200);
+
+  if(!filtered.length){
+    statusEl.textContent = 'No spells found for the current filters.';
+    return;
+  }
+
+  statusEl.textContent = `${filtered.length} spell(s) found`;
+  filtered.forEach(row=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'profile-btn w-full text-left';
+    btn.style.whiteSpace = 'normal';
+    btn.textContent = spellResultSummary(row);
+    btn.addEventListener('click', async ()=>{
+      let detail = row;
+      if(row?.name){
+        const looked = await fetchReferenceLookup('spells', row.name);
+        if(looked)detail = looked;
+      }
+      spellExploreSelected = detail;
+      detailEl.textContent = spellDetailText(detail);
+    });
+    resultsEl.appendChild(btn);
+  });
+}
+
+function wireSpellExplorerTab(){
+  const btn = document.getElementById('spell-explore-search-btn');
+  const qEl = document.getElementById('spell-explore-query');
+  const traditionEl = document.getElementById('spell-explore-tradition');
+  const rankEl = document.getElementById('spell-explore-rank');
+  const typeEl = document.getElementById('spell-explore-type');
+
+  if(btn && !btn.dataset.wired){
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', ()=>{ runSpellExplorerSearch(); });
+  }
+  if(qEl && !qEl.dataset.wired){
+    qEl.dataset.wired = '1';
+    qEl.addEventListener('keydown', (e)=>{ if(e.key === 'Enter')runSpellExplorerSearch(); });
+  }
+  if(traditionEl && !traditionEl.dataset.wired){
+    traditionEl.dataset.wired = '1';
+    traditionEl.addEventListener('change', ()=>{ runSpellExplorerSearch(); });
+  }
+  if(rankEl && !rankEl.dataset.wired){
+    rankEl.dataset.wired = '1';
+    rankEl.addEventListener('change', ()=>{ runSpellExplorerSearch(); });
+  }
+  if(typeEl && !typeEl.dataset.wired){
+    typeEl.dataset.wired = '1';
+    typeEl.addEventListener('change', ()=>{ runSpellExplorerSearch(); });
+  }
+}
+
 async function runLibrarySearch(){
   const kindEl = document.getElementById('lib-kind');
   const equipFilterEl = document.getElementById('lib-equip-filter');
@@ -1489,8 +1721,7 @@ async function runLibrarySearch(){
       : `Searching equipment catalog (${seed.length} items)...`;
     const qLower = q.toLowerCase();
     rows = seed.filter(r=>{
-      const hay = [r.name, r.item_type, r.category, r.traits, r.description, r.proficiency_category, r.damage].map(v=>(v||'').toString().toLowerCase()).join(' ');
-      return hay.includes(qLower) && equipmentCategoryMatch(r, equipFilter) && equipmentRefineMatch(r, equipRefine);
+      return equipmentQueryMatch(r, qLower) && equipmentCategoryMatch(r, equipFilter) && equipmentRefineMatch(r, equipRefine);
     }).slice(0, 120);
   } else {
     rows = await fetchReferenceList(kind, q, 120);
@@ -2564,6 +2795,7 @@ loadData();
 buildAll();
 wireSimpleInputs();
 wireLibraryTab();
+wireSpellExplorerTab();
 renderProfileControls();
 attachProfileControls();
 
