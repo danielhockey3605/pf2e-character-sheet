@@ -390,6 +390,43 @@ tailwind.config = {
     <div data-id="177" class="space-y-4" id="strikes-container"></div>
   </div>
 
+  <div class="section-card">
+    <div class="section-title">⚔ Turn Action Tracker</div>
+    <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end">
+      <div>
+        <label class="text-[10px] text-txt-muted uppercase">Actions Left</label>
+        <div id="turn-actions-left" class="mod-display text-2xl">3</div>
+      </div>
+      <div>
+        <label class="text-[10px] text-txt-muted uppercase">Max Actions</label>
+        <input id="turn-actions-max" type="number" min="0" max="6" value="3" class="field-input w-full num-input" />
+      </div>
+      <div>
+        <label class="text-[10px] text-txt-muted uppercase">Strikes This Turn</label>
+        <div id="turn-strikes-used" class="mod-display text-xl">0</div>
+      </div>
+      <div>
+        <label class="text-[10px] text-txt-muted uppercase">Reaction</label>
+        <div id="turn-reaction-state" class="text-sm text-txt-muted">Ready</div>
+      </div>
+      <div>
+        <label class="text-[10px] text-txt-muted uppercase">Free Actions</label>
+        <div id="turn-free-used" class="mod-display text-xl">0</div>
+      </div>
+      <div>
+        <button id="turn-reset-btn" type="button" class="profile-btn w-full">Start New Turn</button>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button id="turn-spend-1" type="button" class="profile-btn">Spend 1 Action</button>
+      <button id="turn-spend-2" type="button" class="profile-btn">Spend 2 Actions</button>
+      <button id="turn-spend-3" type="button" class="profile-btn">Spend 3 Actions</button>
+      <button id="turn-use-reaction" type="button" class="profile-btn">Use Reaction</button>
+      <button id="turn-use-free" type="button" class="profile-btn">Use Free Action</button>
+    </div>
+    <div id="turn-action-status" class="text-xs text-txt-muted mt-2">Track action economy here. Strike/Cast quick actions also consume from this tracker.</div>
+  </div>
+
   <div data-id="178" class="section-card">
     <div data-id="179" class="section-title">⚔ Action Types Reference</div>
     <div data-id="180" class="flex flex-wrap gap-4 text-sm">
@@ -593,7 +630,7 @@ tailwind.config = {
       <div class="section-card lg:col-span-2">
         <div class="section-title">⚔ Spell Details</div>
         <div id="spell-explore-detail" class="text-sm text-txt-muted whitespace-pre-wrap min-h-[260px]">Select a spell to view details.</div>
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mt-3 items-end">
+        <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 mt-3 items-end">
           <div class="sm:col-span-2">
             <label class="text-[10px] text-txt-muted uppercase">Add To</label>
             <select id="spell-explore-add-target" class="field-input w-full">
@@ -624,6 +661,20 @@ tailwind.config = {
           </div>
           <div>
             <button id="spell-explore-add-btn" type="button" class="profile-btn w-full">Add Selected Spell</button>
+          </div>
+          <div>
+            <label class="text-[10px] text-txt-muted uppercase">Cast Cost</label>
+            <select id="spell-explore-cast-cost" class="field-input w-full">
+              <option value="auto">Auto</option>
+              <option value="1">1 Action</option>
+              <option value="2">2 Actions</option>
+              <option value="3">3 Actions</option>
+              <option value="reaction">Reaction</option>
+              <option value="free">Free Action</option>
+            </select>
+          </div>
+          <div>
+            <button id="spell-explore-cast-btn" type="button" class="profile-btn w-full">Cast Selected Spell</button>
           </div>
         </div>
         <div id="spell-explore-add-status" class="text-xs text-txt-muted mt-2">Select a spell result, then add it to your sheet.</div>
@@ -1785,6 +1836,196 @@ function addSpellToSheetFromExplorer(row, requestedTarget, requestedRank){
   return { ok:true, message:`${spellName} added to Level ${level} spell names.` };
 }
 
+function ensureTurnTrackerState(){
+  const max = Math.max(0, parseInt(CD.turn_actions_max, 10) || 3);
+  const used = Math.max(0, parseInt(CD.turn_actions_used, 10) || 0);
+  CD.turn_actions_max = max;
+  CD.turn_actions_used = Math.min(used, max);
+  CD.turn_reaction_used = CD.turn_reaction_used ? 1 : 0;
+  CD.turn_free_used = Math.max(0, parseInt(CD.turn_free_used, 10) || 0);
+  CD.turn_strikes_used = Math.max(0, parseInt(CD.turn_strikes_used, 10) || 0);
+  if(!Array.isArray(CD.combat_log))CD.combat_log = [];
+}
+
+function actionLog(msg){
+  ensureTurnTrackerState();
+  const stamp = new Date().toLocaleTimeString();
+  CD.combat_log.unshift(`${stamp} - ${msg}`);
+  CD.combat_log = CD.combat_log.slice(0, 40);
+}
+
+function actionsRemaining(){
+  ensureTurnTrackerState();
+  return Math.max(0, CD.turn_actions_max - CD.turn_actions_used);
+}
+
+function parseCastActionCost(castTime){
+  const text = (castTime || '').toString().toLowerCase();
+  if(!text.trim())return 1;
+  if(text.includes('reaction') || text.includes('↺'))return 'reaction';
+  if(text.includes('free') || text.includes('◇'))return 'free';
+  const diamonds = (text.match(/◆/g) || []).length;
+  if(diamonds >= 1 && diamonds <= 3)return diamonds;
+  const m = text.match(/\b([123])\s*action/);
+  if(m)return parseInt(m[1], 10);
+  if(text.includes('two-action') || text.includes('2-action'))return 2;
+  if(text.includes('three-action') || text.includes('3-action'))return 3;
+  return 1;
+}
+
+function consumeTurnAction(cost, contextLabel){
+  ensureTurnTrackerState();
+  const label = contextLabel || 'Action used';
+  if(cost === 'reaction'){
+    if(CD.turn_reaction_used){
+      return { ok:false, message:'Reaction already used this turn.' };
+    }
+    CD.turn_reaction_used = 1;
+    actionLog(`${label} (Reaction)`);
+    return { ok:true, message:`${label}: reaction used.` };
+  }
+  if(cost === 'free'){
+    CD.turn_free_used += 1;
+    actionLog(`${label} (Free Action)`);
+    return { ok:true, message:`${label}: free action noted.` };
+  }
+  const needed = Math.max(1, Math.min(3, parseInt(cost, 10) || 1));
+  const remain = actionsRemaining();
+  if(remain < needed){
+    return { ok:false, message:`Not enough actions left (${remain}) for ${needed}-action activity.` };
+  }
+  CD.turn_actions_used += needed;
+  actionLog(`${label} (${needed} action${needed > 1 ? 's' : ''})`);
+  return { ok:true, message:`${label}: spent ${needed} action${needed > 1 ? 's' : ''}.` };
+}
+
+function spendCastResource(destination, rank){
+  if(destination === 'focus'){
+    if((parseInt(CD.focus_current, 10) || 0) > 0){
+      CD.focus_current = Math.max(0, (parseInt(CD.focus_current, 10) || 0) - 1);
+      return 'Focus point spent.';
+    }
+    return 'No focus points available (cast still logged).';
+  }
+  if(destination === 'slot'){
+    const level = Math.max(1, Math.min(10, parseInt(rank, 10) || 1));
+    const key = `lvl${level}`;
+    if(!CD.spellSlots[key])CD.spellSlots[key] = { total:0, used:0 };
+    const total = Math.max(0, parseInt(CD.spellSlots[key].total, 10) || 0);
+    const used = Math.max(0, parseInt(CD.spellSlots[key].used, 10) || 0);
+    if(used < total){
+      CD.spellSlots[key].used = used + 1;
+      return `Level ${level} slot spent (${CD.spellSlots[key].used}/${total}).`;
+    }
+    return `No level ${level} slots available (cast still logged).`;
+  }
+  return '';
+}
+
+function castSelectedSpellFromExplorer(){
+  const addTargetEl = document.getElementById('spell-explore-add-target');
+  const addRankEl = document.getElementById('spell-explore-add-rank');
+  const castCostEl = document.getElementById('spell-explore-cast-cost');
+  const statusEl = document.getElementById('spell-explore-add-status');
+
+  if(!spellExploreSelected || !spellExploreSelected.name){
+    if(statusEl)statusEl.textContent = 'Select a spell first.';
+    return;
+  }
+
+  const target = addTargetEl?.value || 'auto';
+  const rankChoice = addRankEl?.value || 'auto';
+  const rank = rankChoice === 'auto' ? normalizeSpellRank(spellExploreSelected) : Math.max(0, Math.min(10, parseInt(rankChoice, 10) || normalizeSpellRank(spellExploreSelected)));
+  const destination = resolveSpellDestination(spellExploreSelected, target);
+  const selectedCost = castCostEl?.value || 'auto';
+  const actionCost = selectedCost === 'auto' ? parseCastActionCost(spellExploreSelected.cast_time) : (selectedCost === 'reaction' || selectedCost === 'free' ? selectedCost : Math.max(1, Math.min(3, parseInt(selectedCost, 10) || 1)));
+
+  const actionResult = consumeTurnAction(actionCost, `Cast ${spellExploreSelected.name}`);
+  if(!actionResult.ok){
+    if(statusEl)statusEl.textContent = actionResult.message;
+    buildActionTracker();
+    return;
+  }
+
+  const resourceText = spendCastResource(destination, rank);
+  buildAll();
+  saveData();
+  const finalText = [actionResult.message, resourceText].filter(Boolean).join(' ');
+  if(statusEl)statusEl.textContent = finalText || `${spellExploreSelected.name} cast logged.`;
+}
+
+function buildActionTracker(){
+  ensureTurnTrackerState();
+  const leftEl = document.getElementById('turn-actions-left');
+  const maxEl = document.getElementById('turn-actions-max');
+  const strikesEl = document.getElementById('turn-strikes-used');
+  const reactionEl = document.getElementById('turn-reaction-state');
+  const freeEl = document.getElementById('turn-free-used');
+  const statusEl = document.getElementById('turn-action-status');
+  if(!leftEl || !maxEl || !strikesEl || !reactionEl || !freeEl || !statusEl)return;
+
+  leftEl.textContent = String(actionsRemaining());
+  maxEl.value = String(CD.turn_actions_max);
+  strikesEl.textContent = String(CD.turn_strikes_used || 0);
+  reactionEl.textContent = CD.turn_reaction_used ? 'Used' : 'Ready';
+  freeEl.textContent = String(CD.turn_free_used || 0);
+  const latest = CD.combat_log?.[0] || 'Track action economy here. Strike/Cast quick actions also consume from this tracker.';
+  statusEl.textContent = latest;
+
+  if(!maxEl.dataset.wired){
+    maxEl.dataset.wired = '1';
+    maxEl.addEventListener('input', ()=>{
+      CD.turn_actions_max = Math.max(0, Math.min(6, parseInt(maxEl.value, 10) || 0));
+      CD.turn_actions_used = Math.min(CD.turn_actions_used || 0, CD.turn_actions_max);
+      buildActionTracker();
+      saveData();
+    });
+  }
+
+  const bindBtn = (id, handler) => {
+    const btn = document.getElementById(id);
+    if(!btn || btn.dataset.wired)return;
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', handler);
+  };
+
+  bindBtn('turn-reset-btn', ()=>{
+    ensureTurnTrackerState();
+    CD.turn_actions_used = 0;
+    CD.turn_reaction_used = 0;
+    CD.turn_free_used = 0;
+    CD.turn_strikes_used = 0;
+    actionLog('New turn started');
+    buildActionTracker();
+    saveData();
+  });
+  bindBtn('turn-spend-1', ()=>{
+    consumeTurnAction(1, 'Manual action spend');
+    buildActionTracker();
+    saveData();
+  });
+  bindBtn('turn-spend-2', ()=>{
+    consumeTurnAction(2, 'Manual action spend');
+    buildActionTracker();
+    saveData();
+  });
+  bindBtn('turn-spend-3', ()=>{
+    consumeTurnAction(3, 'Manual action spend');
+    buildActionTracker();
+    saveData();
+  });
+  bindBtn('turn-use-reaction', ()=>{
+    consumeTurnAction('reaction', 'Manual reaction use');
+    buildActionTracker();
+    saveData();
+  });
+  bindBtn('turn-use-free', ()=>{
+    consumeTurnAction('free', 'Manual free action use');
+    buildActionTracker();
+    saveData();
+  });
+}
+
 async function runSpellExplorerSearch(){
   const qEl = document.getElementById('spell-explore-query');
   const traditionEl = document.getElementById('spell-explore-tradition');
@@ -1871,6 +2112,7 @@ function wireSpellExplorerTab(){
   const addBtn = document.getElementById('spell-explore-add-btn');
   const addTargetEl = document.getElementById('spell-explore-add-target');
   const addRankEl = document.getElementById('spell-explore-add-rank');
+  const castBtn = document.getElementById('spell-explore-cast-btn');
   const addStatusEl = document.getElementById('spell-explore-add-status');
 
   if(btn && !btn.dataset.wired){
@@ -1908,6 +2150,13 @@ function wireSpellExplorerTab(){
       if(!result.ok)return;
       buildAll();
       saveData();
+    });
+  }
+
+  if(castBtn && !castBtn.dataset.wired){
+    castBtn.dataset.wired = '1';
+    castBtn.addEventListener('click', ()=>{
+      castSelectedSpellFromExplorer();
     });
   }
 
@@ -2238,6 +2487,8 @@ function getDefaultData() {
     strikes:[{name:'',atk:0,dmgDice:'',dmgBonus:0,dmgType:'',range:'',traits:'',notes:''},{name:'',atk:0,dmgDice:'',dmgBonus:0,dmgType:'',range:'',traits:'',notes:''},{name:'',atk:0,dmgDice:'',dmgBonus:0,dmgType:'',range:'',traits:'',notes:''}],
     reactions:Array.from({length:6},()=>({name:'',actions:'◆',trigger:'',desc:''})),
     heroPoints:0,
+    turn_actions_max:3,turn_actions_used:0,turn_reaction_used:0,turn_free_used:0,turn_strikes_used:0,
+    combat_log:[],
     ancestryFeats:Array.from({length:10},()=>({level:'',name:'',desc:''})),
     classFeats:Array.from({length:10},()=>({level:'',name:'',desc:''})),
     skillFeats:Array.from({length:10},()=>({level:'',name:'',skill:'',desc:''})),
@@ -2341,6 +2592,7 @@ function profBonus(rank){const lvl=parseInt(CD.charLevel)||1;if(rank==='U')retur
 // ==============================
 function buildAll(){
   syncStrikesFromWeapons();
+  buildActionTracker();
   buildAbilities();buildDyingDots();buildSaves();buildPerceptionProf();buildACProf();
   buildSkills();buildStrikes();buildReactions();buildHeroDots();
   buildFeats('ancestry-feats','ancestryFeats',['level','name','desc']);
@@ -2482,6 +2734,8 @@ function buildStrikes(){
     <div class="mt-2 flex flex-wrap gap-3 items-center">
       <div><label class="text-[9px] text-txt-muted uppercase">Weapon Prof</label><div id="wpn-prof-${i}" class="flex gap-1 mt-1"></div></div>
       <span class="text-[10px] text-txt-muted">MAP: <span class="text-crimson-light font-bold">${fmtMod((s.atk||0)-5)} / ${fmtMod((s.atk||0)-10)}</span></span>
+      <button type="button" class="profile-btn text-xs" data-strike-use="${i}" data-strike-cost="1">Use Strike (1A)</button>
+      <button type="button" class="profile-btn text-xs" data-strike-use="${i}" data-strike-cost="reaction">Reactive Strike</button>
       <div class="flex-1"><label class="text-[9px] text-txt-muted uppercase">Notes</label><input class="field-input w-full text-xs" value="${s.notes}" data-strike="${i}" data-f="notes" /></div>
     </div>`;
     c.appendChild(d);
@@ -2502,6 +2756,19 @@ function buildStrikes(){
         const idx=parseInt(this.dataset.strike);const f=this.dataset.f;
         CD.strikes[idx][f]=(this.type==='number'?parseInt(this.value)||0:this.value);
         saveData();if(f==='atk')buildStrikes();
+      });
+    });
+    d.querySelectorAll('[data-strike-use]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const idx = parseInt(btn.dataset.strikeUse, 10);
+        const cost = btn.dataset.strikeCost === 'reaction' ? 'reaction' : Math.max(1, Math.min(3, parseInt(btn.dataset.strikeCost, 10) || 1));
+        const strikeName = (CD.strikes[idx]?.name || `Strike ${idx + 1}`).trim();
+        const result = consumeTurnAction(cost, `Strike: ${strikeName}`);
+        if(result.ok){
+          CD.turn_strikes_used = (parseInt(CD.turn_strikes_used, 10) || 0) + 1;
+        }
+        buildActionTracker();
+        saveData();
       });
     });
   }
